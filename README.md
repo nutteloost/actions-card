@@ -185,5 +185,5 @@ prevent_default_dialog: true
 Check out my other custom cards for Home Assistant:
 
 * [Todo Swipe Card](https://github.com/nutteloost/todo-swipe-card) - A specialized swipe card for todo lists in Home Assistant with custom styling
-* [Actions Card](https://github.com/nutteloost/actions-card) - Wraps another Home Assistant card to add tap, hold, and double-tap actions
+* [Simple Swipe Card](https://github.com/nutteloost/simple-swipe-card) - A swipeable container card for Home Assistant that allows you to add multiple cards and swipe between them
 
