@@ -2,7 +2,7 @@
 
 A custom card that wraps another card and adds tap, hold, and double tap actions.
 
-<img src="https://raw.githubusercontent.com/nutteloost/actions-card/main/images/actions-card-example.gif" width="400" alt="Example">
+<img src="https://raw.githubusercontent.com/nutteloost/actions-card/main/images/visual_editor_search.png" width="250">
 
 Actions Card is a wrapper for any Home Assistant card that adds interactive functionality through tap, hold, and double-tap actions. This allows you to transform any standard or custom card into an interactive element without modifying the original card. With Actions Card, you can navigate to different views, toggle entities, call services, open URLs, and more - all from cards that normally don't support these interactions.
 
