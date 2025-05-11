@@ -1,0 +1,7 @@
+{
+  "name": "Actions Card",
+  "render_readme": true,
+  "filename": "actions-card.js",
+  "content_in_root": true,
+  "homeassistant": "2023.6.0"
+}
