@@ -59,7 +59,7 @@ The Actions Card includes a visual editor that appears when you add or edit the 
 <img src="https://raw.githubusercontent.com/nutteloost/actions-card/main/images/visual_editor_search.png" width="250">
 
 #### Search for the card you want to wrap in the card picker
-<img src="https://raw.githubusercontent.com/nutteloost/actions-card/main/images/card-picker.png" width="250">
+<img src="https://raw.githubusercontent.com/nutteloost/actions-card/main/images/card-picker.png" width="450">
 
 #### Edit the card and add actions
 <img src="https://raw.githubusercontent.com/nutteloost/actions-card/main/images/visual_editor_card_editor.png" width="750">
