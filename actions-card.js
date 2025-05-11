@@ -5,7 +5,7 @@
  * Allows adding interactive behaviors to any other card type.
  * 
  * @author Martijn Oost (nutteloost)
- * @version 1.1.3
+ * @version 1.1.4
  * @license MIT
  * @see {@link https://github.com/nutteloost/actions-card}
  * 
@@ -21,7 +21,7 @@ import { LitElement, html, css } from 'https://unpkg.com/lit-element@2.4.0/lit-e
 import { fireEvent } from "https://unpkg.com/custom-card-helpers@^1?module";
 
 // Version management
-const CARD_VERSION = "1.1.3";
+const CARD_VERSION = "1.1.4";
 
 // Debug configuration - set to false for production
 const DEBUG = false;
