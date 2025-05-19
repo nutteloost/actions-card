@@ -22,7 +22,7 @@ Actions Card is a wrapper for any Home Assistant card that adds interactive func
 - Visual editor support with card picker
 - Works with both standard and custom cards
 
-## Installation 
+## Installation
 
 ### HACS (Recommended)
 1. Open HACS
