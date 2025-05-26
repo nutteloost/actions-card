@@ -1,4 +1,8 @@
 # Actions Card
+[![Github All Releases](https://img.shields.io/github/downloads/nutteloost/actions-card/total.svg)]()
+[![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs)
+[![Reddit Profile](https://img.shields.io/badge/Reddit-My%20stuff-orange?logo=reddit)](https://www.reddit.com/user/nutteloost/submitted/)
+[![Home Assistant Community Forum](https://img.shields.io/badge/Home%20Assistant-Community%20Forum-blue?logo=home-assistant)](https://community.home-assistant.io/t/simple-swipe-card-a-custom-card-for-easy-card-navigation/888415)
 
 A custom card that wraps another card and adds tap, hold, and double tap actions.
 
