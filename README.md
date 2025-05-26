@@ -143,7 +143,7 @@ You can add a confirmation dialog to any action:
 confirmation: Are you sure?  # Simple string confirmation
 ```
 
-Ore with more options: 
+Or with more options: 
 
 ```yaml
 confirmation:
