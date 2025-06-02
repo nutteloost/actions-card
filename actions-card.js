@@ -5,7 +5,7 @@
  * Allows adding interactive behaviors to any other card type.
  * 
  * @author Martijn Oost (nutteloost)
- * @version 1.1.4
+ * @version 1.1.5
  * @license MIT
  * @see {@link https://github.com/nutteloost/actions-card}
  * 
@@ -21,7 +21,7 @@ import { LitElement, html, css } from 'https://unpkg.com/lit-element@2.4.0/lit-e
 import { fireEvent } from "https://unpkg.com/custom-card-helpers@^1?module";
 
 // Version management
-const CARD_VERSION = "1.1.4";
+const CARD_VERSION = "1.1.5";
 
 // Debug configuration - set to false for production
 const DEBUG = false;
@@ -1006,33 +1006,20 @@ class ActionsCardEditor extends LitElement {
         
         // Track active child editor dialogs
         this._activeChildEditors = new Set();
+
+        // Track if we should show picker after card removal - CARD PICKER FIX
+        this._showPickerAfterRemoval = false;
     }
 
-    /**
-     * Lifecycle callback when component is connected to DOM
-     */
-    connectedCallback() {
+    async connectedCallback() {
         super.connectedCallback();
         logDebug("EDITOR", "Editor connected to DOM");
-        setTimeout(() => this._ensureCardPickerLoaded(), 100);
         
-        // Add document-level listener for tab switching events
-        this._tabSwitchHandler = (e) => {
-            let node = e.target;
-            while (node) {
-                // Check if this event is from our editor
-                if (node === this) {
-                    // Mark this event as processed by the actions card editor
-                    logDebug("EVENT", "Marking iron-select event as processed by actions card editor");
-                    e._processedByActionsCardEditor = true;
-                    e.stopPropagation();
-                    return;
-                }
-                node = node.parentNode || (node.getRootNode && node.getRootNode().host);
-            }
-        };
+        // CARD PICKER FIX: Ensure card picker is loaded before proceeding
+        await this._ensureComponentsLoaded();
         
-        document.addEventListener('iron-select', this._tabSwitchHandler, { capture: true });
+        // Call _ensureCardPickerLoaded after a short delay to ensure shadowRoot is ready
+        setTimeout(() => this._ensureCardPickerLoaded(), 50);
         
         // Try to detect if we're in an editor dialog
         let parent = this.parentNode;
@@ -1046,8 +1033,200 @@ class ActionsCardEditor extends LitElement {
             parent = parent.parentNode || (parent.getRootNode && parent.getRootNode().host);
         }
         
-        // Add global handlers to prevent editor dialog closure
+        // Setup global handlers to prevent editor dialog closure
         this._setupGlobalHandlers();
+    }
+
+    // CARD PICKER FIX: Add comprehensive component loading
+    async _ensureComponentsLoaded() {
+        const maxAttempts = 10;
+        let attempts = 0;
+        
+        // First, try to load via existing cards (more reliable)
+        while (!customElements.get("hui-card-picker") && attempts < maxAttempts) {
+            await this._loadCustomElements();
+            if (!customElements.get("hui-card-picker")) {
+                await new Promise(resolve => setTimeout(resolve, 200));
+                attempts++;
+            }
+        }
+        
+        // If still not loaded, try alternative approach
+        if (!customElements.get("hui-card-picker")) {
+            logDebug("EDITOR", "Primary loading failed, trying alternative approach");
+            await this._tryAlternativeLoading();
+        }
+        
+        if (!customElements.get("hui-card-picker")) {
+            logDebug("EDITOR", "All loading attempts failed, card picker may not be available");
+        } else {
+            logDebug("EDITOR", "Successfully loaded hui-card-picker");
+        }
+    }
+    
+    async _loadCustomElements() {
+        if (customElements.get("hui-card-picker")) {
+            return; // Already loaded
+        }
+        
+        try {
+            // Try to load through known working card editors
+            const loadAttempts = [
+                () => import('/hacsfiles/ha-card-helpers/ha-card-helpers.js').catch(() => null),
+                () => this._tryLoadViaExistingCards(),
+                () => this._forceLoadCardPicker()
+            ];
+    
+            for (const attempt of loadAttempts) {
+                try {
+                    await attempt();
+                    if (customElements.get("hui-card-picker")) {
+                        logDebug("EDITOR", "Component loaded successfully");
+                        return;
+                    }
+                } catch (e) {
+                    // Silent fail and try next method
+                }
+            }
+        } catch (e) {
+            logDebug("EDITOR", "Error in _loadCustomElements:", e);
+        }
+    }
+    
+    async _tryLoadViaExistingCards() {
+        const cardTypes = [
+            'hui-entities-card', 'hui-conditional-card', 'hui-vertical-stack-card', 
+            'hui-horizontal-stack-card', 'hui-grid-card', 'hui-map-card'
+        ];
+        
+        for (const cardType of cardTypes) {
+            try {
+                const cardElement = customElements.get(cardType);
+                if (cardElement && cardElement.getConfigElement) {
+                    await cardElement.getConfigElement();
+                    if (customElements.get("hui-card-picker")) {
+                        return;
+                    }
+                }
+            } catch (e) {
+                // Continue to next card type
+            }
+        }
+    }
+    
+    async _tryAlternativeLoading() {
+        try {
+            // Try to access Lovelace directly
+            if (window.loadCardHelpers) {
+                const helpers = await window.loadCardHelpers();
+                if (helpers && customElements.get("hui-card-picker")) {
+                    return;
+                }
+            }
+            
+            // Try to trigger via temporary element creation
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = '<hui-card-picker></hui-card-picker>';
+            document.body.appendChild(tempDiv);
+            await new Promise(resolve => setTimeout(resolve, 100));
+            document.body.removeChild(tempDiv);
+        } catch (e) {
+            logDebug("EDITOR", "Alternative loading failed:", e);
+        }
+    }
+    
+    async _forceLoadCardPicker() {
+        try {
+            // Last resort: try to manually define if possible
+            if (!customElements.get("hui-card-picker")) {
+                // Trigger a UI refresh that might load missing components
+                const event = new CustomEvent('hass-refresh', { bubbles: true, composed: true });
+                this.dispatchEvent(event);
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+        } catch (e) {
+            // Final fallback failed
+        }
+    }
+
+    // CARD PICKER FIX: Enhanced card picker loading method from v1.1.4
+    _ensureCardPickerLoaded() {
+        if (!this.shadowRoot) {
+            logDebug("EDITOR", "_ensureCardPickerLoaded: No shadowRoot, retrying...");
+            setTimeout(() => this._ensureCardPickerLoaded(), 100);
+            return;
+        }
+        
+        // Don't load picker if we already have a card configured
+        if (this._config?.card && !this._showPickerAfterRemoval) {
+            logDebug("EDITOR", "Card already configured, skipping picker load");
+            return;
+        }
+        
+        logDebug("EDITOR", "_ensureCardPickerLoaded called");
+    
+        const container = this.shadowRoot.querySelector('#card-picker-container');
+        if (!container) {
+            logDebug("EDITOR", "Card picker container not found in render, requesting update");
+            this.requestUpdate();
+            return;
+        }
+        
+        container.style.display = 'block';
+    
+        if (!container.hasAttribute('event-barrier-applied')) {
+            container.setAttribute('event-barrier-applied', 'true');
+            
+            // Add comprehensive event handling
+            container.addEventListener('config-changed', (e) => {
+                logDebug("EVENT", "Card picked in container:", e.detail?.config?.type);
+                e._processedByActionsCardEditor = true;
+                
+                if (e.detail?.config) {
+                    e.stopPropagation();
+                    this._handleCardPicked({
+                        detail: {
+                            config: e.detail.config,
+                            editorId: this._editorId
+                        },
+                        stopPropagation: () => {}
+                    });
+                }
+            }, { capture: true });
+            
+            logDebug("EDITOR", "Applied event handling to card picker container");
+        }
+        
+        let picker = container.querySelector('hui-card-picker');
+        if (!picker) {
+            logDebug("EDITOR", "Creating new hui-card-picker element");
+            picker = document.createElement('hui-card-picker');
+            picker.hass = this.hass;
+            picker.lovelace = this.lovelace;
+            picker.addEventListener('config-changed', this._boundHandleCardPicked);
+            container.appendChild(picker);
+        }
+        
+        // Ensure picker is visible and has content
+        picker.style.display = 'block';
+        
+        if (picker.requestUpdate) {
+            picker.requestUpdate();
+        }
+        
+        // Verify picker has loaded properly
+        setTimeout(() => {
+            const hasContent = picker.shadowRoot?.querySelector('.cards-container, .card-grid, hui-card') || 
+                              picker.querySelector('.cards-container, .card-grid, hui-card');
+            if (!hasContent) {
+                logDebug("EDITOR", "Card picker still appears empty, forcing another refresh");
+                if (picker.requestUpdate) {
+                    picker.requestUpdate();
+                }
+            } else {
+                logDebug("EDITOR", "Card picker loaded successfully with content");
+            }
+        }, 200);
     }
     
     /**
@@ -1100,7 +1279,6 @@ class ActionsCardEditor extends LitElement {
      */
     disconnectedCallback() {
         super.disconnectedCallback();
-        document.removeEventListener('iron-select', this._tabSwitchHandler, { capture: true });
         
         // Clean up global handlers
         if (this._globalEventHandler) {
@@ -1125,121 +1303,6 @@ class ActionsCardEditor extends LitElement {
         }
         
         logDebug("EDITOR", "Editor disconnected from DOM and events cleaned up");
-    }
-
-    /**
-     * Ensures the card picker is loaded and visible
-     * @private
-     */
-    _ensureCardPickerLoaded() {
-        if (!this.shadowRoot) return;
-        
-        // Direct DOM manipulation to ensure card picker visibility
-        const container = this.shadowRoot.querySelector('#card-picker-container');
-        if (container) {
-            container.style.display = 'block';
-            
-            if (!container.hasAttribute('event-barrier-applied')) {
-                // Mark it to avoid applying multiple times
-                container.setAttribute('event-barrier-applied', 'true');
-                
-                // Add a comprehensive event barrier for all events
-                container.addEventListener('click', (e) => {
-                    // Mark events as processed by the actions card editor
-                    logDebug("EVENT", "Marking click event in container as processed");
-                    e._processedByActionsCardEditor = true;
-                }, { capture: true });
-                
-                // Add special handling for keyboard events
-                container.addEventListener('keydown', (e) => {
-                    // Mark all keyboard events from our container
-                    logDebug("EVENT", "Marking keydown event in container as processed");
-                    e._processedByActionsCardEditor = true;
-                    e.stopPropagation();
-                }, { capture: true });
-                
-                // Handle input events specifically for search
-                container.addEventListener('input', (e) => {
-                    // Find the search input 
-                    const isSearchInput = e.target.tagName === 'INPUT' && 
-                                     (e.target.type === 'search' || e.target.placeholder?.includes('Search'));
-                    if (isSearchInput) {
-                        // Mark search input events
-                        logDebug("EVENT", "Marking search input event in container as processed");
-                        e._isSearchInput = true;
-                        e._processedByActionsCardEditor = true;
-                        e.stopPropagation();
-                    }
-                }, { capture: true });
-                
-                // Create a wrapper for the config-changed event
-                container.addEventListener('config-changed', (e) => {
-                    // Mark as processed 
-                    logDebug("EVENT", "Marking config-changed event in container as processed");
-                    e._processedByActionsCardEditor = true;
-                    
-                    // If this is from our card picker, handle it here and stop propagation
-                    if (!e.detail?.editorId) {
-                        e.stopPropagation();
-                        // Process the picked card
-                        if (e.detail?.config) {
-                            logDebug("EVENT", "Processing picked card in container event handler", e.detail.config);
-                            this._handleCardPicked({
-                                detail: {
-                                    config: e.detail.config,
-                                    editorId: this._editorId
-                                },
-                                stopPropagation: () => {}
-                            });
-                        }
-                    }
-                }, { capture: true });
-                
-                logDebug("EDITOR", "Applied comprehensive event handling to card picker container");
-            }
-            
-            const picker = container.querySelector('hui-card-picker');
-            if (picker) {
-                // Force display
-                picker.style.display = 'block';
-                
-                // If picker has no content, try to refresh it
-                if (picker.requestUpdate) {
-                    picker.requestUpdate();
-                }
-                
-                // Add special handling directly to search inputs
-                const searchInputs = picker.shadowRoot?.querySelectorAll('input[type="search"]') ||
-                                    picker.shadowRoot?.querySelectorAll('input');
-                                    
-                if (searchInputs && searchInputs.length) {
-                    searchInputs.forEach(input => {
-                        if (!input.hasAttribute('actions-card-handler')) {
-                            input.setAttribute('actions-card-handler', 'true');
-                            
-                            // Add strong handlers to prevent event bubbling
-                            input.addEventListener('keydown', (e) => {
-                                logDebug("EVENT", "Handling keydown directly on search input");
-                                e._processedByActionsCardEditor = true;
-                                e._isSearchInput = true;
-                                e.stopPropagation();
-                            }, { capture: true });
-                            
-                            input.addEventListener('input', (e) => {
-                                logDebug("EVENT", "Handling input directly on search input");
-                                e._processedByActionsCardEditor = true;
-                                e._isSearchInput = true;
-                                e.stopPropagation();
-                            }, { capture: true });
-                            
-                            logDebug("EDITOR", "Applied direct event handlers to search input");
-                        }
-                    });
-                }
-            }
-        }
-        
-        this.requestUpdate();
     }
 
     /**
@@ -1273,6 +1336,8 @@ class ActionsCardEditor extends LitElement {
         
         // Ensure card picker is loaded after config is set
         setTimeout(() => this._ensureCardPickerLoaded(), 50);
+        setTimeout(() => this._ensureCardPickerLoaded(), 200);
+        setTimeout(() => this._ensureCardPickerLoaded(), 500);
     }
 
     /**
@@ -1302,7 +1367,8 @@ class ActionsCardEditor extends LitElement {
                 if (target.type === 'checkbox') {
                     actionConfig[key] = target.checked;
                 } else {
-                    actionConfig[key] = target.value || '';
+                    // ENTITY PICKER FIX: For entity pickers and other components, prioritize ev.detail.value
+                    actionConfig[key] = ev.detail?.value ?? target.value ?? '';
                 }
             } else {
                 // Handle action type selector
@@ -1534,10 +1600,7 @@ class ActionsCardEditor extends LitElement {
       }
     }
 
-    /**
-     * Removes the wrapped card
-     * @private
-     */
+    // CARD PICKER FIX: Enhanced remove method from v1.1.4
     _removeWrappedCard() {
         if (!this._config) return;
         
@@ -1546,9 +1609,36 @@ class ActionsCardEditor extends LitElement {
         delete updatedConfig.card;
         
         this._config = updatedConfig;
-        // Use the safer method to fire config changed
+        
+        // Set flag to show picker after removal
+        this._showPickerAfterRemoval = true;
+        
         this._fireConfigChangedWithFlags();
         this.requestUpdate();
+        
+        // Ensure card picker appears after removal with staggered attempts
+        setTimeout(() => {
+            this._ensureCardPickerLoaded();
+            this._showPickerAfterRemoval = false; // Reset flag after showing
+        }, 100);
+        
+        setTimeout(() => this._ensureCardPickerLoaded(), 300);
+        setTimeout(() => this._ensureCardPickerLoaded(), 600);
+    }
+
+    // CARD PICKER FIX: Add method to check if picker should be shown
+    _shouldShowCardPicker() {
+        // Only show card picker when:
+        // 1. No card is currently configured
+        // 2. Editor is in a state where card selection is expected
+        return !this._config?.card && (
+            // Show during initial setup
+            !this._config || 
+            // Show after card removal
+            this._showPickerAfterRemoval ||
+            // Show if config exists but has no card
+            (this._config && Object.keys(this._config).length > 0)
+        );
     }
 
     /**
@@ -1683,7 +1773,7 @@ class ActionsCardEditor extends LitElement {
                             .value=${actionConfig.entity || ''}
                             data-option="${actionType}"
                             data-attribute="entity"
-                            @change=${this._valueChanged}
+                            @value-changed=${this._valueChanged}
                             allow-custom-entity
                         ></ha-entity-picker>
                         <div class="help-text">
@@ -2015,8 +2105,8 @@ class ActionsCardEditor extends LitElement {
                     `}
                 </div>
                 
-                <!-- Card Picker (if no card is selected or removed) -->
-                ${!hasCard ? html`
+                <!-- Card Picker (ENHANCED - only show when no card AND we should show it) -->
+                ${!hasCard && this._shouldShowCardPicker() ? html`
                     <div id="card-picker-container">
                         <hui-card-picker
                             .hass=${this.hass}
@@ -2085,6 +2175,16 @@ class ActionsCardEditor extends LitElement {
                 </div>
             </div>
         `;
+    }
+
+    updated(changedProperties) {
+        super.updated(changedProperties);
+        
+        // Ensure card picker is loaded after any render update
+        if (changedProperties.has('_config')) {
+            setTimeout(() => this._ensureCardPickerLoaded(), 50);
+            setTimeout(() => this._ensureCardPickerLoaded(), 200);
+        }
     }
 
     /**
