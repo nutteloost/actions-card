@@ -7,28 +7,6 @@
 
 A custom card that wraps another card and adds tap, hold, and double tap actions.
 
-> ⚠ **Important**: Currently there are issues with some native Home Assistant cards that load initially, but won't load after refreshing or reloading the dashboard:
-> - ~Energy~ (fixed!)
-> - Alarm Panel
-> - Area
-> - Clock
-> - Gauge
-> - History-graph
-> - Humidifier
-> - Logbook
-> - Map (works with card_mod config)
-> - Markdown
-> - Media-control
-> - Picture-entity
-> - Picture-glance
-> - Plant status
-> - Statistic
-> - Statistics graph
-> - iFrame
->
-> I'm working on a fix, but this will take some time. 
-
-
 <img src="https://raw.githubusercontent.com/nutteloost/actions-card/main/images/actions-card-example.png" width="750">
 
 Actions Card is a wrapper for any Home Assistant card that adds interactive functionality through tap, hold, and double-tap actions. This allows you to transform any standard or custom card into an interactive element without modifying the original card. With Actions Card, you can navigate to different views, toggle entities, call services, open URLs, and more - all from cards that normally don't support these interactions.
