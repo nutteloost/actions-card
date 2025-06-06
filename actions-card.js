@@ -5,7 +5,7 @@
  * Allows adding interactive behaviors to any other card type.
  * 
  * @author Martijn Oost (nutteloost)
- * @version 1.1.5
+ * @version 1.2.0
  * @license MIT
  * @see {@link https://github.com/nutteloost/actions-card}
  * 
@@ -21,7 +21,7 @@ import { LitElement, html, css } from 'https://unpkg.com/lit-element@2.4.0/lit-e
 import { fireEvent } from "https://unpkg.com/custom-card-helpers@^1?module";
 
 // Version management
-const CARD_VERSION = "1.1.5";
+const CARD_VERSION = "1.2.0";
 
 // Debug configuration - set to false for production
 const DEBUG = false;
@@ -101,8 +101,25 @@ class ActionsCard extends LitElement {
     this._lastActionTime = 0;
     this._childCard = null; // Initialize as null
     this.config = {}; // Initialize config
-    this._triedPreload = false; // Track preloading attempts
     this._childCardClickHandler = null; // Track the click handler
+    
+    // Initialize card helpers
+    this._cardHelpers = null;
+  }
+
+  /**
+   * Load card helpers asynchronously
+   * @private
+   */
+  async _loadCardHelpers() {
+    if (!this._cardHelpers && window.loadCardHelpers) {
+        try {
+            this._cardHelpers = await window.loadCardHelpers();
+            logDebug("INIT", "Card helpers loaded successfully");
+        } catch (e) {
+            console.error("ActionsCard: Failed to load card helpers:", e);
+        }
+    }
   }
 
   /**
@@ -125,7 +142,10 @@ class ActionsCard extends LitElement {
         // Check if the card config itself actually changed to avoid unnecessary rebuilds
         if (!this._childCard || JSON.stringify(this._currentCardConfig) !== JSON.stringify(config.card)) {
             this._currentCardConfig = JSON.parse(JSON.stringify(config.card)); // Store a copy
-            this._createCardElement(config.card);
+            // Make this async since we're now using card helpers
+            this._createCardElement(config.card).catch(e => {
+                console.error("ActionsCard: Error in async card creation:", e);
+            });
         }
     } else {
         // If no card config, ensure _childCard is null to show preview
@@ -140,7 +160,7 @@ class ActionsCard extends LitElement {
    * @param {Object} cardConfig - Configuration for the child card
    * @private
    */
-  _createCardElement(cardConfig) {
+  async _createCardElement(cardConfig) {
     if (!cardConfig) {
         this._childCard = null;
         this.requestUpdate();
@@ -156,51 +176,64 @@ class ActionsCard extends LitElement {
             throw new Error('Card configuration requires a `type`.');
         }
 
-        const isEnergyCard = cardType.includes('energy');
-        const elementTag = cardType.startsWith('custom:')
-            ? cardType.substring(7)
-            : `hui-${cardType}-card`;
-
-        // For energy cards, take a different approach
-        if (isEnergyCard) {
-            logDebug("INIT", `Creating energy card: ${elementTag}`);
-            this._createEnergyCard(elementTag, actualCardConfig);
+        const isCustomCard = cardType.startsWith('custom:');
+        
+        // For custom cards, use direct element creation for better compatibility
+        if (isCustomCard) {
+            logDebug("INIT", `Creating custom card directly: ${cardType}`);
+            await this._createCardElementDirect(actualCardConfig);
             return;
         }
 
-        // Create the element
-        const element = document.createElement(elementTag);
+        // For standard HA cards, try card helpers first
+        let element = null;
+        let useDirectMethod = false;
 
-        // Check if the element has setConfig before proceeding
-        if (typeof element.setConfig !== 'function') {
-            logDebug("INIT", `Element ${elementTag} created but setConfig not available, will retry in 100ms`);
-            setTimeout(() => this._createCardElement(cardConfig), 100);
-            return;
+        try {
+            // Ensure card helpers are loaded
+            if (!this._cardHelpers) {
+                await this._loadCardHelpers();
+            }
+
+            if (this._cardHelpers) {
+                logDebug("INIT", `Creating card using helpers: ${cardType}`);
+                element = await this._cardHelpers.createCardElement(actualCardConfig);
+            } else {
+                useDirectMethod = true;
+            }
+        } catch (helperError) {
+            logDebug("INIT", `Card helpers failed for ${cardType}, falling back to direct method:`, helperError);
+            useDirectMethod = true;
         }
 
-        // Set config and hass
-        element.setConfig(actualCardConfig);
+        // Fallback to direct method if helpers failed
+        if (useDirectMethod) {
+            await this._createCardElementDirect(actualCardConfig);
+            return;
+        }
+        
+        // Set hass if available
         if (this.hass) {
             element.hass = this.hass;
         }
 
         // Update the internal state
         this._childCard = element;
-        logDebug("INIT", "Child card created/updated:", elementTag);
+        logDebug("INIT", "Child card created/updated using card helpers:", cardType);
+
+        // Apply dialog prevention AFTER child card is ready
+        await this.updateComplete; // Wait for this component to finish updating
+        
+        // Add a small delay to ensure child card is fully initialized
+        setTimeout(() => {
+            if (this.config && this.config.prevent_default_dialog) {
+                this._preventDefaultDialogs();
+            }
+        }, 50);
 
     } catch (e) {
         console.error("ActionsCard: Error creating child card element:", e, cardConfig);
-        // Create an error card instead
-        const errorCard = document.createElement('hui-error-card');
-        errorCard.setConfig({
-            type: 'error',
-            error: e.message,
-            origConfig: cardConfig,
-        });
-        if (this.hass) {
-            errorCard.hass = this.hass;
-        }
-        this._childCard = errorCard;
+        this._createErrorCard(e.message, cardConfig);
     }
     
     // Trigger a re-render
@@ -208,72 +241,46 @@ class ActionsCard extends LitElement {
   }
 
   /**
-   * Special handling for energy cards that need more time to initialize
-   * @param {string} elementTag - The tag name of the element to create
-   * @param {Object} config - The card configuration
+   * Create card element using direct DOM method (for custom cards and fallback)
+   * @param {Object} cardConfig - Configuration for the child card
    * @private
    */
-  _createEnergyCard(elementTag, config) {
-    logDebug("INIT", `Starting specialized energy card creation: ${elementTag}`);
+  async _createCardElementDirect(cardConfig) {
+    const cardType = cardConfig.type;
     
-    // First, try to ensure the element is defined
-    const checkElementDefined = () => {
-        if (customElements.get(elementTag)) {
-            createElementWithRetry();
-        } else {
-            logDebug("INIT", `Energy element ${elementTag} not defined yet, waiting...`);
-            setTimeout(checkElementDefined, 200);
+    const elementTag = cardType.startsWith('custom:')
+        ? cardType.substring(7)
+        : `hui-${cardType}-card`;
+
+    // Create the element directly
+    const element = document.createElement(elementTag);
+
+    // Check if the element has setConfig before proceeding (with retry logic)
+    if (typeof element.setConfig !== 'function') {
+        logDebug("INIT", `Element ${elementTag} created but setConfig not available, will retry in 100ms`);
+        setTimeout(() => this._createCardElementDirect(cardConfig), 100);
+        return;
+    }
+
+    // Set config and hass
+    element.setConfig(cardConfig);
+    if (this.hass) {
+        element.hass = this.hass;
+    }
+
+    // Update the internal state
+    this._childCard = element;
+    logDebug("INIT", "Child card created/updated directly:", elementTag);
+
+    // Apply dialog prevention AFTER child card is ready
+    await this.updateComplete; // Wait for this component to finish updating
+    
+    // Add a small delay to ensure child card is fully initialized
+    setTimeout(() => {
+        if (this.config && this.config.prevent_default_dialog) {
+            this._preventDefaultDialogs();
         }
-    };
-    
-    // Then, create the element with retry logic
-    const createElementWithRetry = () => {
-        try {
-            const element = document.createElement(elementTag);
-            
-            // Test if the element has the required methods
-            if (typeof element.setConfig !== 'function') {
-                logDebug("INIT", `Element ${elementTag} created but setConfig not available yet`);
-                setTimeout(createElementWithRetry, 200);
-                return;
-            }
-            
-            // Make sure Lovelace is loaded
-            if (!window.customCards && !window.loadCardHelpers && typeof element.getCardSize !== 'function') {
-                logDebug("INIT", "Waiting for Lovelace helpers to be available");
-                setTimeout(createElementWithRetry, 300);
-                return;
-            }
-            
-            // Proceed with configuration
-            try {
-                element.setConfig(config);
-                
-                if (this.hass) {
-                    element.hass = this.hass;
-                }
-                
-                // Update internal state
-                this._childCard = element;
-                logDebug("INIT", `Energy card ${elementTag} successfully created and configured`);
-                this.requestUpdate();
-                
-            } catch (configError) {
-                console.error(`ActionsCard: Error configuring ${elementTag}:`, configError);
-                this._createErrorCard(`Failed to configure ${elementTag}: ${configError.message}`, config);
-            }
-            
-        } catch (creationError) {
-            console.error(`ActionsCard: Error creating ${elementTag}:`, creationError);
-            this._createErrorCard(`Failed to create ${elementTag}: ${creationError.message}`, config);
-        }
-    };
-    
-    // Try to force load energy components if not already loaded
-    this._preloadEnergyComponents();
-    
-    // Start the element creation process
-    checkElementDefined();
+    }, 50);
   }
 
   /**
@@ -283,92 +290,24 @@ class ActionsCard extends LitElement {
    * @private
    */
   _createErrorCard(errorMessage, origConfig) {
-    const errorCard = document.createElement('hui-error-card');
-    errorCard.setConfig({
-        type: 'error',
-        error: errorMessage,
-        origConfig: origConfig,
-    });
-    if (this.hass) {
-        errorCard.hass = this.hass;
+    try {
+        const errorCard = document.createElement('hui-error-card');
+        errorCard.setConfig({
+            type: 'error',
+            error: errorMessage,
+            origConfig: origConfig,
+        });
+        if (this.hass) {
+            errorCard.hass = this.hass;
+        }
+        this._childCard = errorCard;
+    } catch (e) {
+        // Last resort fallback
+        const errorCard = document.createElement('div');
+        errorCard.innerHTML = `<ha-alert alert-type="error">Error: ${errorMessage}</ha-alert>`;
+        this._childCard = errorCard;
     }
-    this._childCard = errorCard;
     this.requestUpdate();
-  }
-
-  /**
-   * Try to preload the energy components
-   * @private
-   */
-  _preloadEnergyComponents() {
-    // Check if we've already tried to preload
-    if (this._triedPreload) return;
-    this._triedPreload = true;
-    
-    logDebug("INIT", "Attempting to preload energy components");
-    
-    // These are the energy card components we want to ensure are loaded
-    const energyComponents = [
-        'hui-energy-distribution-card',
-        'hui-energy-solar-graph-card',
-        'hui-energy-usage-graph-card',
-        'hui-energy-date-selection-card'
-    ];
-    
-    // Try to load the components via dynamic import if possible
-    if (window.loadCardHelpers) {
-        window.loadCardHelpers().then(helpers => {
-            if (helpers && helpers.createCardElement) {
-                logDebug("INIT", "Using loadCardHelpers to preload energy components");
-                
-                // Create a temporary div to hold the elements
-                const tempDiv = document.createElement('div');
-                tempDiv.style.display = 'none';
-                document.body.appendChild(tempDiv);
-                
-                // Try to create each energy component
-                energyComponents.forEach(tag => {
-                    try {
-                        const cardType = tag.replace('hui-', '').replace('-card', '');
-                        helpers.createCardElement({type: cardType}).then(el => {
-                            tempDiv.appendChild(el);
-                            logDebug("INIT", `Preloaded ${tag} successfully`);
-                        }).catch(e => {
-                            logDebug("INIT", `Error preloading ${tag}: ${e.message}`);
-                        });
-                    } catch (e) {
-                        logDebug("INIT", `Error creating ${tag} with helpers: ${e.message}`);
-                    }
-                });
-                
-                // Remove the temporary div after a delay
-                setTimeout(() => {
-                    if (tempDiv.parentNode) {
-                        document.body.removeChild(tempDiv);
-                    }
-                }, 2000);
-            }
-        }).catch(e => {
-            logDebug("INIT", "Error loading card helpers:", e);
-        });
-    } else {
-        logDebug("INIT", "loadCardHelpers not available, using fallback method");
-        
-        // Fallback: try to force register the components directly
-        energyComponents.forEach(tag => {
-            if (!customElements.get(tag)) {
-                logDebug("INIT", `Attempting to load ${tag} directly`);
-                
-                // Try to create the element anyway - this might trigger lazy loading
-                try {
-                    const tempElement = document.createElement(tag);
-                    // Just create it to force registration, don't need to keep it
-                } catch (e) {
-                    logDebug("INIT", `Error creating ${tag}: ${e.message}`);
-                }
-            }
-        });
-    }
   }
 
   /**
@@ -381,24 +320,42 @@ class ActionsCard extends LitElement {
     // Clean up any existing handler first
     this._cleanupDefaultDialogPrevention();
 
-    // Capture hass-more-info events from child card
-    this._childCardClickHandler = (ev) => {
-        if (ev.type === 'hass-more-info') {
-            logDebug("EVENT", "Preventing default hass-more-info dialog");
-            ev.stopPropagation();
-            ev.preventDefault();
+    // Wait for child card to be fully ready
+    const setupPrevention = () => {
+        // Capture hass-more-info events from child card
+        this._childCardClickHandler = (ev) => {
+            if (ev.type === 'hass-more-info') {
+                logDebug("EVENT", "Preventing default hass-more-info dialog");
+                ev.stopPropagation();
+                ev.preventDefault();
+            }
+        };
+        
+        // Apply handlers to the child card and its shadow root if available
+        if (this._childCard) {
+            this._childCard.addEventListener('hass-more-info', this._childCardClickHandler, true);
+            
+            // Try to get to internal DOM elements if possible
+            if (this._childCard.shadowRoot) {
+                this._childCard.shadowRoot.addEventListener('hass-more-info', this._childCardClickHandler, true);
+            }
+            
+            // Also try to find and handle any nested cards that might exist
+            const nestedCards = this._childCard.querySelectorAll('[class*="card"], [class*="tile"]');
+            nestedCards.forEach(card => {
+                card.addEventListener('hass-more-info', this._childCardClickHandler, true);
+            });
         }
-    };
-    
-    // Apply handlers to the child card and its shadow root if available
-    this._childCard.addEventListener('hass-more-info', this._childCardClickHandler, true);
-    
-    // Try to get to internal DOM elements if possible
-    if (this._childCard.shadowRoot) {
-        this._childCard.shadowRoot.addEventListener('hass-more-info', this._childCardClickHandler, true);
-    }
 
-    logDebug("INIT", "Set up event listeners to prevent default dialog behavior");
+        logDebug("INIT", "Set up event listeners to prevent default dialog behavior");
+    };
+
+    // If child card appears to have a shadowRoot that's not ready yet, wait a bit
+    if (this._childCard.shadowRoot === undefined) {
+        setTimeout(setupPrevention, 100);
+    } else {
+        setupPrevention();
+    }
   }
 
   /**
@@ -411,6 +368,13 @@ class ActionsCard extends LitElement {
         if (this._childCard.shadowRoot) {
             this._childCard.shadowRoot.removeEventListener('hass-more-info', this._childCardClickHandler, true);
         }
+        
+        // Clean up nested cards
+        const nestedCards = this._childCard.querySelectorAll('[class*="card"], [class*="tile"]');
+        nestedCards.forEach(card => {
+            card.removeEventListener('hass-more-info', this._childCardClickHandler, true);
+        });
+        
         this._childCardClickHandler = null;
     }
   }
@@ -469,9 +433,12 @@ class ActionsCard extends LitElement {
   updated(changedProperties) {
     super.updated(changedProperties);
 
-    if (changedProperties.has('config') && this.config && this.config.prevent_default_dialog) {
-        // Apply prevention of default dialogs when config changes
-        this._preventDefaultDialogs();
+    // Only call _preventDefaultDialogs if the child card has actually changed
+    if (changedProperties.has('_childCard') && this._childCard && this.config && this.config.prevent_default_dialog) {
+        // Add a small delay to ensure child card is fully rendered
+        setTimeout(() => {
+            this._preventDefaultDialogs();
+        }, 100);
     }
   }
 
@@ -480,8 +447,10 @@ class ActionsCard extends LitElement {
    */
   connectedCallback() {
     super.connectedCallback();
-    if (this.config && this.config.prevent_default_dialog) {
-        this._preventDefaultDialogs();
+    
+    // FIXED: Ensure card helpers are loaded when connected
+    if (!this._cardHelpers) {
+        this._loadCardHelpers();
     }
   }
 
@@ -690,6 +659,9 @@ class ActionsCard extends LitElement {
    */
   _executeMoreInfoAction(actionConfig) {
     const entityId = this._getEntityId(actionConfig);
+    logDebug("ACTION", "Executing more-info action for entity:", entityId);
+    logDebug("ACTION", "Action config:", actionConfig);
+    
     if (entityId) {
       logDebug("ACTION", "Showing more-info for entity:", entityId);
       fireEvent(this, 'hass-more-info', { entityId });
