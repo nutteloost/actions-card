@@ -31,12 +31,19 @@ Actions Card is a wrapper for any Home Assistant card that adds interactive func
 
 ### HACS (Recommended)
 1. Open HACS
-2. Go to "Frontend" section
-3. Click on the three dots in the top right corner
-4. Select "Custom repositories"
-5. Add this repository URL: `https://github.com/nutteloost/actions-card`
-6. Click "Add"
-7. Search for "Actions Card" and install it
+2. Search for "Actions Card" and install it
+
+Or click this button to open the repository page in HACS:
+
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?repository=actions-card&category=integration&owner=nutteloost)
+
+### HACS (Manual)
+1. Open HACS
+2. Click on the three dots in the top right corner
+3. Select "Custom repositories"
+4. Add this repository URL (https://github.com/nutteloost/actions-card)
+5. Click "Add"
+6. Search for "Actions Card" and install it
 
 ### Manual Installation
 1. Download `actions-card.js` from the latest release
