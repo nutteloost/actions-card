@@ -5,7 +5,7 @@
  * Allows adding interactive behaviors to any other card type.
  * 
  * @author Martijn Oost (nutteloost)
- * @version 1.2.0
+ * @version 1.3.0
  * @license MIT
  * @see {@link https://github.com/nutteloost/actions-card}
  * 
@@ -21,7 +21,7 @@ import { LitElement, html, css } from 'https://unpkg.com/lit-element@2.4.0/lit-e
 import { fireEvent } from "https://unpkg.com/custom-card-helpers@^1?module";
 
 // Version management
-const CARD_VERSION = "1.2.0";
+const CARD_VERSION = "1.3.0";
 
 // Debug configuration - set to false for production
 const DEBUG = false;
@@ -692,6 +692,15 @@ class ActionsCard extends LitElement {
    * @private
    */
   _executeDomEventAction(actionConfig) {
+    // Special handling for Browser Mod compatibility
+    if (actionConfig.event_type === 'browser_mod' && actionConfig.event_data) {
+      logDebug("ACTION", "Firing Browser Mod compatible event:", actionConfig.event_data);
+      // Browser Mod expects 'll-custom' events with browser_mod in detail
+      fireEvent(this, 'll-custom', { browser_mod: actionConfig.event_data });
+      return;
+    }
+    
+    // Standard fire-dom-event handling
     if (actionConfig.event_type) {
       logDebug("ACTION", "Firing DOM event:", actionConfig.event_type, actionConfig.event_data || null);
       fireEvent(this, actionConfig.event_type, actionConfig.event_data || null);
@@ -1642,8 +1651,8 @@ class ActionsCardEditor extends LitElement {
         }[actionType] || actionType.replace(/_/g, ' ');
         
         return html`
-            <div class="action-row">
-                <div class="action-label">${title}</div>
+            <div class="option-row">
+                <div class="option-label">${title}</div>
                 <ha-select
                     label="Action"
                     .value=${actionConfig.action || 'none'}
@@ -2047,7 +2056,7 @@ class ActionsCardEditor extends LitElement {
                 </div>
                 
                 <!-- Card Management -->
-                <div class="section wrapped-card-section">
+                <div class="section">
                     <div class="section-header">Wrapped Card</div>
                     
                     ${!hasCard ? html`
@@ -2090,7 +2099,7 @@ class ActionsCardEditor extends LitElement {
                 ` : ''}
 
                 <!-- General Options -->
-                <div class="section options-section">
+                <div class="section">
                     <div class="section-header">General Options</div>
                     
                     <div class="option-row">
@@ -2114,7 +2123,7 @@ class ActionsCardEditor extends LitElement {
                 </div>
                 
                 <!-- Actions Configuration -->
-                <div class="section actions-section">
+                <div class="section">
                     <div class="section-header">Actions</div>
                     
                     <!-- Tap Action -->
@@ -2140,10 +2149,19 @@ class ActionsCardEditor extends LitElement {
                     </div>
                 </div>
                 
-                <!-- Version display -->
+                <!-- Version Display with GitHub Link -->
                 <div class="version-display">
                     <div class="version-text">Actions Card</div>
-                    <div class="version-badge">v${CARD_VERSION}</div>
+                    <div class="version-badges">
+                        <div class="version-badge">v${CARD_VERSION}</div>
+                        <a href="https://github.com/nutteloost/actions-card" 
+                           target="_blank" 
+                           rel="noopener noreferrer"
+                           class="github-badge">
+                            <ha-icon icon="mdi:github"></ha-icon>
+                            <span>GitHub</span>
+                        </a>
+                    </div>
                 </div>
             </div>
         `;
@@ -2198,27 +2216,23 @@ class ActionsCardEditor extends LitElement {
                 font-size: 14px;
             }
             
+            /* MAIN SECTION STYLES */
             .section {
-                margin-bottom: 20px;
-                padding-bottom: 16px;
-                border-bottom: 1px solid var(--divider-color);
+                margin: 16px 0;
+                padding: 16px;
+                border: 1px solid var(--divider-color);
+                border-radius: var(--ha-card-border-radius, 8px);
+                background-color: var(--card-background-color, var(--primary-background-color));
             }
-            
-            .section:last-of-type {
-                border-bottom: none;
-                margin-bottom: 0;
-                padding-bottom: 0;
-            }
-            
+
             .section-header {
                 font-size: 16px;
                 font-weight: 500;
-                margin-bottom: 8px;
+                margin-bottom: 12px;
                 color: var(--primary-text-color);
-                padding-bottom: 4px;
             }
             
-            .option-row, .action-row {
+            .option-row {
                 display: flex;
                 align-items: center;
                 justify-content: space-between;
@@ -2226,7 +2240,7 @@ class ActionsCardEditor extends LitElement {
                 min-height: 40px;
             }
             
-            .option-label, .action-label {
+            .option-label {
                 flex: 1;
                 margin-right: 12px;
                 font-size: 14px;
@@ -2329,6 +2343,12 @@ class ActionsCardEditor extends LitElement {
                 font-weight: 500;
             }
             
+            .version-badges {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+            
             .version-badge {
                 background-color: var(--primary-color);
                 color: var(--text-primary-color);
@@ -2336,7 +2356,33 @@ class ActionsCardEditor extends LitElement {
                 padding: 4px 12px;
                 font-size: 14px;
                 font-weight: 500;
-                margin-left: auto;
+            }
+            
+            .github-badge {
+                display: flex;
+                align-items: center;
+                gap: 4px;
+                background-color: #24292e;
+                color: white;
+                border-radius: 16px;
+                padding: 4px 12px;
+                text-decoration: none;
+                font-size: 14px;
+                font-weight: 500;
+                transition: background-color 0.2s ease;
+            }
+            
+            .github-badge:hover {
+                background-color: #444d56;
+            }
+            
+            .github-badge ha-icon {
+                --mdc-icon-size: 16px;
+                width: 16px;
+                height: 16px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
             }
             
             ha-textfield, ha-select, ha-entity-picker {
@@ -2364,6 +2410,7 @@ class ActionsCardEditor extends LitElement {
             .confirmation-row {
                 margin-top: 8px;
                 padding-top: 8px;
+                padding-bottom: 0px;
                 border-top: 1px dashed var(--divider-color);
             }
             
@@ -2372,10 +2419,6 @@ class ActionsCardEditor extends LitElement {
                 margin-left: 16px;
                 padding-left: 8px;
                 border-left: 2px solid var(--divider-color);
-            }
-            
-            .wrapped-card-section {
-                margin-bottom: 0;
             }
         `;
     }
