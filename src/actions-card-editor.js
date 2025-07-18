@@ -17,6 +17,7 @@ import { logDebug } from "./utils/debug.js";
 import { getCardDescriptor } from "./utils/helpers.js";
 import { ACTION_TYPE_OPTIONS } from "./actions/action-types.js";
 import { getEditorStyles } from "./styles/editor-styles.js";
+import { CARD_VERSION } from "./index.js";
 
 /**
  * Create the ActionsCardEditor class with loaded dependencies
@@ -1235,7 +1236,7 @@ export function createActionsCardEditor() {
         >
           ${this._renderInfoPanel()} ${this._renderCardManagement()}
           ${this._renderCardPicker()} ${this._renderGeneralOptions()}
-          ${this._renderActionsConfiguration()}
+          ${this._renderActionsConfiguration()} ${this._renderFooter()}
         </div>
       `;
     }
@@ -1407,6 +1408,31 @@ export function createActionsCardEditor() {
               "double_tap_action",
               doubleTapAction,
             )}
+          </div>
+        </div>
+      `;
+    }
+
+    /**
+     * Render the footer with version and GitHub link
+     * @returns {TemplateResult} Footer template
+     * @private
+     */
+    _renderFooter() {
+      return html`
+        <div class="version-display">
+          <div class="version-text">Actions Card</div>
+          <div class="version-badges">
+            <div class="version-badge">v${CARD_VERSION}</div>
+            <a
+              href="https://github.com/nutteloost/actions-card"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="github-badge"
+            >
+              <ha-icon icon="mdi:github"></ha-icon>
+              <span>GitHub</span>
+            </a>
           </div>
         </div>
       `;

@@ -4,7 +4,7 @@ import { createActionsCardEditor } from "./actions-card-editor.js";
 import { logDebug } from "./utils/debug.js";
 
 // Version management
-const CARD_VERSION = "1.4.0";
+export const CARD_VERSION = "1.4.0";
 
 /**
  * Initialize the Actions Card

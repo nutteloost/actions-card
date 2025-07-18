@@ -189,5 +189,61 @@ export function getEditorStyles() {
       padding-left: 8px;
       border-left: 2px solid var(--divider-color);
     }
+
+    .version-display {
+      margin-top: 24px;
+      padding-top: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .version-text {
+      color: var(--secondary-text-color);
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .version-badges {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .version-badge {
+      background-color: var(--primary-color);
+      color: var(--text-primary-color);
+      border-radius: 16px;
+      padding: 4px 12px;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .github-badge {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background-color: #24292e;
+      color: white;
+      border-radius: 16px;
+      padding: 4px 12px;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      transition: background-color 0.2s ease;
+    }
+
+    .github-badge:hover {
+      background-color: #444d56;
+    }
+
+    .github-badge ha-icon {
+      --mdc-icon-size: 16px;
+      width: 16px;
+      height: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
   `;
 }
