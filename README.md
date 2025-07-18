@@ -83,9 +83,9 @@ This card can be configured using the visual editor or YAML.
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
 | card | object | Required | The card configuration to wrap |
-| tap_action | object | `{ action: 'none' }` | Action to perform on tap |
-| hold_action | object | `{ action: 'none' }` | Action to perform on hold |
-| double_tap_action | object | `{ action: 'none' }` | Action to perform on double tap |
+| tap_action | object | `none` | Action to perform on tap |
+| hold_action | object | `none` | Action to perform on hold |
+| double_tap_action | object | `none` | Action to perform on double tap |
 | prevent_default_dialog | boolean | false | Prevent the default entity dialog from opening |
 
 ### Prevent Default Dialog Option
@@ -96,26 +96,45 @@ The `prevent_default_dialog` option, when enabled, prevents Home Assistant from 
 Each action (tap_action, hold_action, double_tap_action) can use these configurations:
 
 #### Toggle Action
+Toggles the state of an entity (lights, switches, etc.).
+
 ```yaml
 action: toggle
 entity: light.living_room  # Optional - will use the entity from the wrapped card if not specified
 ``` 
+*Options:*
+- `entity` (optional): Entity to toggle. If not specified, uses the entity from the wrapped card.
 
 #### Navigate action
+Navigate to different Lovelace views or dashboards.
+
 ```yaml
 action: navigate
 navigation_path: /lovelace/0
 navigation_replace: false  # Optional - replace or push state to history
 ```
 
+*Options:*
+- `navigation_path` (required): Path to navigate to (e.g., `/lovelace/0`, `/lovelace/lights`)
+- `navigation_replace` (optional): Replace current history state instead of pushing new state
+
 #### URL Action
+Open external URLs or internal Home Assistant pages.
+
 ```yaml
 action: url
 url_path: https://www.home-assistant.io
 target: _blank  # Optional - _blank or _self
 ```
 
+*Options:*
+- `url_path` (required): URL to open
+- `target` (optional): `_blank` (new tab) or `_self` (same tab)
+
+
 #### Call Service Action
+Execute any Home Assistant service with custom data.
+
 ```yaml
 action: call-service
 service: light.turn_on
@@ -124,20 +143,39 @@ service_data:
   brightness: 255
 ```
 
+*Options:*
+- `service` (required): Service to call in format `domain.service`
+- `service_data` (optional): Data to pass to the service
+
 #### More Info Action
+Show the entity information dialog.
+
 ```yaml
 action: more-info
 entity: light.living_room  # Optional - will use the entity from the wrapped card if not specified
 ```
 
+*Options:*
+- `entity` (optional): Entity to show info for. If not specified, uses the entity from the wrapped card.
+
+
 #### Assist Action
+Open the Home Assistant Assist dialog.
+
 ```yaml
 action: assist
 pipeline_id: last_used  # Optional
 start_listening: true   # Optional
 ```
 
+*Options:*
+- `pipeline_id` (optional): Specific assistant pipeline to use (default: `last_used`)
+- `start_listening` (optional): Start listening immediately when dialog opens
+  
+
 #### Fire DOM Event Action
+Fire custom DOM events for advanced integrations.
+
 ```yaml
 action: fire-dom-event
 event_type: custom-event
@@ -145,21 +183,32 @@ event_data:  # Optional
   example: value
 ```
 
-#### Confirmation Dialog
+*Options:*
+- `event_type` (required): Name of the event to fire
+- `event_data` (optional): Custom data to include with the event
+
+### Confirmation Dialogs
 You can add a confirmation dialog to any action:
+
+#### Simple Confirmation
 ```yaml
-confirmation: Are you sure?  # Simple string confirmation
+confirmation: "Are you sure?"
 ```
 
-Or with more options: 
-
+#### Advanced Confirmation
 ```yaml
 confirmation:
-  text: Are you sure you want to proceed?
-  title: Confirmation  # Optional
-  confirm_text: Yes    # Optional (default: Confirm)
-  dismiss_text: No     # Optional (default: Cancel)
+  text: "Are you sure you want to proceed?"
+  title: "Confirmation"  # Optional
+  confirm_text: "Yes"    # Optional (default: Confirm)
+  dismiss_text: "No"     # Optional (default: Cancel)
 ```
+
+*Confirmation Options:*
+- `text` (required): Confirmation message to display
+- `title` (optional): Dialog title
+- `confirm_text` (optional): Text for confirm button (default: "Confirm")
+- `dismiss_text` (optional): Text for cancel button (default: "Cancel")
 
 #### Hold Time
 Customize the hold time for hold actions (default is 500ms):
@@ -170,6 +219,9 @@ hold_action:
   entity: light.living_room
   hold_time: 700  # Time in milliseconds
 ```
+
+*Hold Time Options:*
+- `hold_time`: Duration in milliseconds to hold before triggering (range: 100-2000ms, default: 500ms)
 
 ### Example Configuration
 ```yaml
@@ -191,6 +243,84 @@ double_tap_action:
   navigation_path: /lovelace/lights
 prevent_default_dialog: true
 ```
+
+### Advanced Examples
+
+<details>
+<summary><strong>Smart Scene Control:</strong></summary>
+
+```yaml
+type: custom:actions-card
+card:
+  type: button
+  entity: scene.movie_night
+  name: Movie Night
+  icon: mdi:movie
+tap_action:
+  action: call-service
+  service: scene.turn_on
+  service_data:
+    entity_id: scene.movie_night
+hold_action:
+  action: call-service
+  service: light.turn_off
+  service_data:
+    entity_id: all
+  confirmation:
+    text: "Turn off all lights?"
+    title: "Confirm Action"
+double_tap_action:
+  action: navigate
+  navigation_path: /lovelace/scenes
+prevent_default_dialog: true
+```
+</details>
+<details>
+<summary><strong>Multiple Entity Control:</strong></summary>
+
+```yaml
+type: custom:actions-card
+card:
+  type: entities
+  title: All Lights
+  entities:
+    - light.living_room
+    - light.kitchen
+    - light.bedroom
+tap_action:
+  action: call-service
+  service: light.toggle
+  service_data:
+    entity_id:
+      - light.living_room
+      - light.kitchen
+      - light.bedroom
+hold_action:
+  action: call-service
+  service: light.turn_off
+  service_data:
+    entity_id: all
+  confirmation: "Turn off all lights in the house?"
+```
+</details>
+<details>
+<summary><strong>Browser Mod Integration:</strong></summary>
+
+```yaml
+type: custom:actions-card
+card:
+  type: button
+  name: Control Popup
+tap_action:
+  action: fire-dom-event
+  event_type: browser_mod
+  event_data:
+    service: browser_mod.popup
+    data:
+      title: "Device Control"
+      content: "popup-card-content"
+```
+</details>
 
 ## My Other Custom Cards
 
