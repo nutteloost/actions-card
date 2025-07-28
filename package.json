@@ -1,6 +1,6 @@
 {
   "name": "actions-card",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "A Home Assistant custom card that wraps another card to add tap, hold, and double-tap actions",
   "main": "build/actions-card.js",
   "type": "module",
@@ -32,6 +32,9 @@
     "clean": "rimraf build/*.js *.map",
     "test:build": "npm run deploy:prod && echo '✅ Production build test passed'"
   },
+  "dependencies": {
+    "lit": "^3.0.0"
+  },  
   "devDependencies": {
     "@rollup/plugin-node-resolve": "^15.0.0",
     "@rollup/plugin-terser": "^0.4.4",

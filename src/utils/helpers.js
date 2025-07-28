@@ -5,7 +5,7 @@
  * Provides consistent interfaces for common operations.
  */
 
-import { logDebug } from "./debug.js";
+import { logDebug } from './debug.js';
 
 /**
  * Get entity ID from configuration or fallback to wrapped card entity
@@ -29,15 +29,15 @@ function getEntityId(actionConfig, cardConfig, childCard) {
  * @returns {Object} An object with type name and card name
  */
 function getCardDescriptor(cardConfig) {
-  if (!cardConfig?.type) return { typeName: "Unknown", name: "" };
-  const type = cardConfig.type.startsWith("custom:")
+  if (!cardConfig?.type) return { typeName: 'Unknown', name: '' };
+  const type = cardConfig.type.startsWith('custom:')
     ? cardConfig.type.substring(7)
     : cardConfig.type;
   const typeName = type
     .split(/[-_]/)
     .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
-    .join(" ");
-  const name = cardConfig.title || cardConfig.name || "";
+    .join(' ');
+  const name = cardConfig.title || cardConfig.name || '';
   return { typeName, name };
 }
 
@@ -53,7 +53,7 @@ async function loadCardHelpers() {
   try {
     return await window.loadCardHelpers();
   } catch (e) {
-    logDebug("ERROR", "Failed to load card helpers:", e);
+    logDebug('ERROR', 'Failed to load card helpers:', e);
     return null;
   }
 }

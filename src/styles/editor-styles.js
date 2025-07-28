@@ -1,4 +1,4 @@
-import { getDependencies } from "../utils/dependencies.js";
+import { getDependencies } from '../utils/dependencies.js';
 
 export function getEditorStyles() {
   const { css } = getDependencies();
@@ -43,10 +43,7 @@ export function getEditorStyles() {
       padding: 16px;
       border: 1px solid var(--divider-color);
       border-radius: var(--ha-card-border-radius, 8px);
-      background-color: var(
-        --card-background-color,
-        var(--primary-background-color)
-      );
+      background-color: var(--card-background-color, var(--primary-background-color));
     }
 
     .section-header {

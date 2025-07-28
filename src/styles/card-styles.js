@@ -1,4 +1,4 @@
-import { getDependencies } from "../utils/dependencies.js";
+import { getDependencies } from '../utils/dependencies.js';
 
 export function getCardStyles() {
   const { css } = getDependencies();
@@ -17,10 +17,7 @@ export function getCardStyles() {
       padding: 16px;
       box-sizing: border-box;
       height: 100%; /* Make preview fill space */
-      background: var(
-        --ha-card-background,
-        var(--card-background-color, white)
-      );
+      background: var(--ha-card-background, var(--card-background-color, white));
       border-radius: var(--ha-card-border-radius, 12px);
     }
     .preview-icon-container {

@@ -1,96 +1,32 @@
-import { logDebug } from "./debug.js";
-
 /**
- * Dependency Loading Utilities
- * Handles dynamic loading of external dependencies with fallback support
+ * OFFLINE DEPENDENCY LOADING - BUNDLED APPROACH
+ *
+ * When using Rollup with node-resolve, LitElement is bundled directly.
+ * This file exists for compatibility but doesn't actually load anything.
  */
 
-let LitElement, html, css, fireEvent;
+// Import LitElement that will be bundled by Rollup
+import { LitElement, html, css } from 'lit';
 
-/**
- * Dynamically load dependencies with fallback for offline support
- * @returns {Promise<boolean>} True if dependencies loaded successfully
- */
+// Simple fireEvent implementation
+const fireEvent = (node, type, detail = {}, options = {}) => {
+  const event = new CustomEvent(type, {
+    detail,
+    bubbles: options.bubbles !== false,
+    cancelable: Boolean(options.cancelable),
+    composed: options.composed !== false
+  });
+  node.dispatchEvent(event);
+  return event;
+};
+
+// Always succeeds since everything is bundled
 async function loadDependencies() {
-  try {
-    // Try multiple CDN sources for better reliability
-    const cdnSources = [
-      "https://cdn.jsdelivr.net/npm/lit-element@2.4.0/+esm",
-      "https://unpkg.com/lit-element@2.4.0/lit-element.js?module",
-      "https://cdn.skypack.dev/lit-element@2.4.0",
-    ];
-
-    const helperSources = [
-      "https://cdn.jsdelivr.net/npm/custom-card-helpers@^1/+esm",
-      "https://unpkg.com/custom-card-helpers@^1?module",
-    ];
-
-    // Try to load lit-element
-    let litLoaded = false;
-    for (const source of cdnSources) {
-      try {
-        const module = await import(source);
-        LitElement = module.LitElement;
-        html = module.html;
-        css = module.css;
-        litLoaded = true;
-        break;
-      } catch (e) {
-        logDebug("INIT", `Failed to load from ${source}:`, e);
-      }
-    }
-
-    if (!litLoaded) {
-      throw new Error("Could not load lit-element from any CDN source");
-    }
-
-    // Try to load custom-card-helpers
-    let helpersLoaded = false;
-    for (const source of helperSources) {
-      try {
-        const module = await import(source);
-        fireEvent = module.fireEvent;
-        helpersLoaded = true;
-        break;
-      } catch (e) {
-        logDebug("INIT", `Failed to load helpers from ${source}:`, e);
-      }
-    }
-
-    if (!helpersLoaded) {
-      // Fallback fireEvent implementation
-      fireEvent = function (node, type, detail, options) {
-        options = options || {};
-        detail = detail === null || detail === undefined ? {} : detail;
-        const event = new Event(type, {
-          bubbles: options.bubbles === undefined ? true : options.bubbles,
-          cancelable: Boolean(options.cancelable),
-          composed: options.composed === undefined ? true : options.composed,
-        });
-        event.detail = detail;
-        node.dispatchEvent(event);
-        return event;
-      };
-    }
-
-    return true;
-  } catch (error) {
-    logDebug("ERROR", "Failed to load dependencies:", error);
-    return false;
-  }
+  return true;
 }
 
 export { loadDependencies, LitElement, html, css, fireEvent };
 
-/**
- * Get the loaded dependencies (must be called after loadDependencies)
- * @returns {Object} Object containing loaded dependencies
- */
 export function getDependencies() {
-  return {
-    LitElement,
-    html,
-    css,
-    fireEvent,
-  };
+  return { LitElement, html, css, fireEvent };
 }
