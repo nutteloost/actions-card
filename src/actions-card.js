@@ -12,17 +12,12 @@
  * - Robust error handling and fallback support
  */
 
-import { LitElement, html, css } from 'lit';
+import { LitElement, html } from 'lit';
 import { logDebug } from './utils/debug.js';
 import { loadCardHelpers } from './utils/helpers.js';
 import { ActionExecutor } from './actions/action-executor.js';
 import { getCardStyles } from './styles/card-styles.js';
-import {
-  DEFAULT_ACTION,
-  INTERACTIVE_TAGS,
-  DEFAULT_TIMINGS,
-  UI_CONSTANTS
-} from './actions/action-types.js';
+import { UI_CONSTANTS } from './actions/action-types.js';
 
 // Simple fireEvent implementation
 const fireEvent = (node, type, detail = {}) => {
@@ -231,6 +226,19 @@ export class ActionsCard extends LitElement {
     }
 
     await this._applyDialogPrevention();
+
+    // Force card_mod re-scan after child card creation
+    setTimeout(() => {
+      if (window.cardmod) {
+        window.cardmod.process_card?.(this._childCard);
+      }
+      this.dispatchEvent(
+        new CustomEvent('card-mod-refresh', {
+          bubbles: true,
+          composed: true
+        })
+      );
+    }, 100);
   }
 
   /**
@@ -294,7 +302,7 @@ export class ActionsCard extends LitElement {
       // Set config and hass
       element.setConfig(cardConfig);
       if (this.hass) {
-        element.hass = this.hass;
+        element.hass = this.hass; // <-- Fixed: this.hass instead of hass
       }
 
       // Update the internal state
@@ -314,6 +322,17 @@ export class ActionsCard extends LitElement {
         if (this.config && this.config.prevent_default_dialog) {
           this._preventDefaultDialogs();
         }
+
+        // Force card_mod re-scan after child card creation
+        if (window.cardmod) {
+          window.cardmod.process_card?.(this._childCard);
+        }
+        this.dispatchEvent(
+          new CustomEvent('card-mod-refresh', {
+            bubbles: true,
+            composed: true
+          })
+        );
       }, 50);
     } catch (error) {
       logDebug('ERROR', `Error setting up card element: ${cardType}`, error);

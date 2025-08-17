@@ -12,7 +12,7 @@
  * - Support for action confirmation dialogs
  */
 
-import { LitElement, html, css } from 'lit';
+import { LitElement, html } from 'lit';
 import { logDebug } from './utils/debug.js';
 import { getCardDescriptor } from './utils/helpers.js';
 import { ACTION_TYPE_OPTIONS } from './actions/action-types.js';
@@ -630,7 +630,7 @@ export class ActionsCardEditor extends LitElement {
       document.body.appendChild(dialog);
 
       // Handle dialog cleanup properly
-      const handleDialogClose = (e) => {
+      const handleDialogClose = (_e) => {
         dialog.removeEventListener('dialog-closed', handleDialogClose);
 
         this._activeChildEditors.delete(dialog);
