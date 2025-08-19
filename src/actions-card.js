@@ -889,22 +889,22 @@ export class ActionsCard extends LitElement {
       `;
     }
 
+    // Apply extracted card_mod styles to host element
+    if (this._extractedCardModStyles?.height) {
+      this.style.height = this._extractedCardModStyles.height;
+    } else if (!this.config.card?.card_mod) {
+      this.style.height = '100%';
+    } else {
+      this.style.height = '';
+    }
+
     // Otherwise, render the wrapper and the child card
     const hasActions =
       this.config.tap_action?.action !== 'none' ||
       this.config.hold_action?.action !== 'none' ||
       this.config.double_tap_action?.action !== 'none';
 
-    // Apply extracted card_mod styles or default styles
-    let wrapperStyle = `cursor: ${hasActions ? 'pointer' : 'default'}; display: block;`;
-
-    if (this._extractedCardModStyles?.height) {
-      // Apply the extracted height directly
-      wrapperStyle += ` height: ${this._extractedCardModStyles.height};`;
-    } else if (!this.config.card?.card_mod) {
-      // Only add default height if no card_mod is present
-      wrapperStyle += ` height: 100%;`;
-    }
+    const wrapperStyle = `cursor: ${hasActions ? 'pointer' : 'default'}; display: block; height: 100%;`;
 
     return html`
       <div
