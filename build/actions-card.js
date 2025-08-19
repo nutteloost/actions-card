@@ -16,7 +16,7 @@ const t=globalThis,i=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
             </ha-button>
           </div>
         </div>
-      `;this.Dt?.height?this.style.height=this.Dt.height:this.config.card?.card_mod?this.style.height="":this.style.height="100%";const t="none"!==this.config.tap_action?.action||"none"!==this.config.hold_action?.action||"none"!==this.config.double_tap_action?.action,i=`cursor: ${t?"pointer":"default"}; display: block; height: 100%;`;return R`
+      `;this.Dt?.height?(this.style.height=this.Dt.height,this.style.minHeight=this.Dt.height,this.style.boxSizing="border-box"):this.config.card?.card_mod?(this.style.height="",this.style.minHeight="",this.style.boxSizing=""):(this.style.height="100%",this.style.minHeight="",this.style.boxSizing="");const t="none"!==this.config.tap_action?.action||"none"!==this.config.hold_action?.action||"none"!==this.config.double_tap_action?.action,i=`cursor: ${t?"pointer":"default"}; display: block; height: 100%;`;return R`
       <div
         @pointerdown="${this.Ft}"
         @pointerup="${this.qt}"
@@ -33,6 +33,8 @@ const t=globalThis,i=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
     `}static get styles(){return function(){const{css:t}=xt();return t`
     :host {
       display: block;
+      box-sizing: border-box;
+      overflow: hidden;
     }
     .preview-container {
       display: flex;
@@ -624,4 +626,4 @@ const t=globalThis,i=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
       align-items: center;
       justify-content: center;
     }
-  `}()}}const _t="1.4.4";customElements.get("actions-card")||customElements.define("actions-card",ActionsCard),customElements.get("actions-card-editor")||customElements.define("actions-card-editor",ActionsCardEditor),ActionsCard.getConfigElement=()=>document.createElement("actions-card-editor"),window.customCards=window.customCards||[],window.customCards.some(t=>"actions-card"===t.type)||window.customCards.push({type:"actions-card",name:"Actions Card",preview:!0,description:"Wraps another card to add tap, hold, and double-tap actions."}),console.info(`%c ACTIONS-CARD %c v${_t} %c`,"color: white; background: #9c27b0; font-weight: 700;","color: #9c27b0; background: white; font-weight: 700;","color: grey; background: white; font-weight: 400;");export{_t as CARD_VERSION};
+  `}()}}const _t="1.4.5";customElements.get("actions-card")||customElements.define("actions-card",ActionsCard),customElements.get("actions-card-editor")||customElements.define("actions-card-editor",ActionsCardEditor),ActionsCard.getConfigElement=()=>document.createElement("actions-card-editor"),window.customCards=window.customCards||[],window.customCards.some(t=>"actions-card"===t.type)||window.customCards.push({type:"actions-card",name:"Actions Card",preview:!0,description:"Wraps another card to add tap, hold, and double-tap actions."}),console.info(`%c ACTIONS-CARD %c v${_t} %c`,"color: white; background: #9c27b0; font-weight: 700;","color: #9c27b0; background: white; font-weight: 700;","color: grey; background: white; font-weight: 400;");export{_t as CARD_VERSION};
