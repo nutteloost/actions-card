@@ -16,7 +16,7 @@ const t=globalThis,i=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
             </ha-button>
           </div>
         </div>
-      `;this.Dt?.height?(this.style.height=this.Dt.height,this.style.minHeight=this.Dt.height,this.style.boxSizing="border-box"):this.config.card?.card_mod?(this.style.height="",this.style.minHeight="",this.style.boxSizing=""):(this.style.height="100%",this.style.minHeight="",this.style.boxSizing="");const t="none"!==this.config.tap_action?.action||"none"!==this.config.hold_action?.action||"none"!==this.config.double_tap_action?.action,i=`cursor: ${t?"pointer":"default"}; display: block; height: 100%;`;return R`
+      `;const t="none"!==this.config.tap_action?.action||"none"!==this.config.hold_action?.action||"none"!==this.config.double_tap_action?.action,i=`cursor: ${t?"pointer":"default"}; display: block;`;return R`
       <div
         @pointerdown="${this.Ft}"
         @pointerup="${this.qt}"
@@ -33,8 +33,8 @@ const t=globalThis,i=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
     `}static get styles(){return function(){const{css:t}=xt();return t`
     :host {
       display: block;
-      box-sizing: border-box;
-      overflow: hidden;
+      position: relative;
+      width: 100%;
     }
     .preview-container {
       display: flex;
@@ -44,7 +44,7 @@ const t=globalThis,i=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
       text-align: center;
       padding: 16px;
       box-sizing: border-box;
-      height: 100%;
+      min-height: 200px; /* Only for preview */
       background: var(--ha-card-background, var(--card-background-color, white));
       border-radius: var(--ha-card-border-radius, 12px);
     }
@@ -52,8 +52,8 @@ const t=globalThis,i=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
       margin-bottom: 16px;
     }
     .preview-icon-container ha-icon {
-      color: var(--info-color, #4a90e2); /* Blue color */
-      font-size: 48px; /* Large icon */
+      color: var(--info-color, #4a90e2);
+      font-size: 48px;
       width: 48px;
       height: 48px;
     }
@@ -70,7 +70,7 @@ const t=globalThis,i=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
       font-size: 14px;
       color: var(--secondary-text-color);
       margin-bottom: 16px;
-      max-width: 300px; /* Prevent overly wide text */
+      max-width: 300px;
       line-height: 1.4;
     }
     .preview-actions ha-button {

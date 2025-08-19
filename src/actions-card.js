@@ -889,28 +889,13 @@ export class ActionsCard extends LitElement {
       `;
     }
 
-    // Apply extracted card_mod styles to host element more robustly
-    if (this._extractedCardModStyles?.height) {
-      this.style.height = this._extractedCardModStyles.height;
-      this.style.minHeight = this._extractedCardModStyles.height;
-      this.style.boxSizing = 'border-box';
-    } else if (!this.config.card?.card_mod) {
-      this.style.height = '100%';
-      this.style.minHeight = '';
-      this.style.boxSizing = '';
-    } else {
-      this.style.height = '';
-      this.style.minHeight = '';
-      this.style.boxSizing = '';
-    }
-
     // Otherwise, render the wrapper and the child card
     const hasActions =
       this.config.tap_action?.action !== 'none' ||
       this.config.hold_action?.action !== 'none' ||
       this.config.double_tap_action?.action !== 'none';
 
-    const wrapperStyle = `cursor: ${hasActions ? 'pointer' : 'default'}; display: block; height: 100%;`;
+    const wrapperStyle = `cursor: ${hasActions ? 'pointer' : 'default'}; display: block;`;
 
     return html`
       <div
