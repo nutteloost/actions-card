@@ -6,6 +6,8 @@ export function getCardStyles() {
   return css`
     :host {
       display: block;
+      box-sizing: border-box;
+      overflow: hidden;
     }
     .preview-container {
       display: flex;
