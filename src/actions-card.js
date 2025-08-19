@@ -158,6 +158,9 @@ export class ActionsCard extends LitElement {
         throw new Error('Card configuration requires a `type`.');
       }
 
+      // Extract card_mod styles before creating the card
+      this._extractedCardModStyles = this._extractCardModStyles(actualCardConfig);
+
       const isCustomCard = cardType.startsWith('custom:');
 
       if (isCustomCard) {
@@ -179,6 +182,27 @@ export class ActionsCard extends LitElement {
     }
 
     this.requestUpdate();
+  }
+
+  /**
+   * Extract card_mod styles to apply them immediately
+   * @param {Object} cardConfig - Card configuration
+   * @returns {Object} Extracted styles
+   * @private
+   */
+  _extractCardModStyles(cardConfig) {
+    if (!cardConfig.card_mod?.style) return null;
+
+    const styleString = cardConfig.card_mod.style;
+    const styles = {};
+
+    // Extract height from card_mod style
+    const heightMatch = styleString.match(/height:\s*([^;!]+)/i);
+    if (heightMatch) {
+      styles.height = heightMatch[1].trim();
+    }
+
+    return Object.keys(styles).length > 0 ? styles : null;
   }
 
   /**
@@ -871,6 +895,17 @@ export class ActionsCard extends LitElement {
       this.config.hold_action?.action !== 'none' ||
       this.config.double_tap_action?.action !== 'none';
 
+    // Apply extracted card_mod styles or default styles
+    let wrapperStyle = `cursor: ${hasActions ? 'pointer' : 'default'}; display: block;`;
+
+    if (this._extractedCardModStyles?.height) {
+      // Apply the extracted height directly
+      wrapperStyle += ` height: ${this._extractedCardModStyles.height};`;
+    } else if (!this.config.card?.card_mod) {
+      // Only add default height if no card_mod is present
+      wrapperStyle += ` height: 100%;`;
+    }
+
     return html`
       <div
         @pointerdown="${this._onPointerDown}"
@@ -880,7 +915,7 @@ export class ActionsCard extends LitElement {
         @contextmenu="${(e) => {
           if (this.config.hold_action) e.preventDefault();
         }}"
-        style="cursor: ${hasActions ? 'pointer' : 'default'}; display: block; height: 100%;"
+        style="${wrapperStyle}"
         aria-label="${hasActions ? 'Interactive card with actions' : ''}"
         role="${hasActions ? 'button' : ''}"
         ?prevent-default-dialog="${this.config.prevent_default_dialog}"

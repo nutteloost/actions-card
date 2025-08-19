@@ -2,7 +2,7 @@ import { ActionsCard } from './actions-card.js';
 import { ActionsCardEditor } from './actions-card-editor.js';
 
 // Version management
-export const CARD_VERSION = '1.4.2';
+export const CARD_VERSION = '1.4.3';
 
 /**
  * Initialize the Actions Card

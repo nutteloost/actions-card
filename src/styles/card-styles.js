@@ -6,7 +6,6 @@ export function getCardStyles() {
   return css`
     :host {
       display: block;
-      height: 100%; /* Ensure host takes up space */
     }
     .preview-container {
       display: flex;
@@ -16,7 +15,7 @@ export function getCardStyles() {
       text-align: center;
       padding: 16px;
       box-sizing: border-box;
-      height: 100%; /* Make preview fill space */
+      height: 100%;
       background: var(--ha-card-background, var(--card-background-color, white));
       border-radius: var(--ha-card-border-radius, 12px);
     }
