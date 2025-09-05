@@ -6,8 +6,9 @@ export function getCardStyles() {
   return css`
     :host {
       display: block;
-      position: relative;
-      width: 100%;
+      box-sizing: border-box;
+      overflow: hidden;
+      height: 100%;
     }
     .preview-container {
       display: flex;
@@ -17,7 +18,7 @@ export function getCardStyles() {
       text-align: center;
       padding: 16px;
       box-sizing: border-box;
-      min-height: 200px; /* Only for preview */
+      height: 100%;
       background: var(--ha-card-background, var(--card-background-color, white));
       border-radius: var(--ha-card-border-radius, 12px);
     }
@@ -25,8 +26,8 @@ export function getCardStyles() {
       margin-bottom: 16px;
     }
     .preview-icon-container ha-icon {
-      color: var(--info-color, #4a90e2);
-      font-size: 48px;
+      color: var(--info-color, #4a90e2); /* Blue color */
+      font-size: 48px; /* Large icon */
       width: 48px;
       height: 48px;
     }
@@ -43,7 +44,7 @@ export function getCardStyles() {
       font-size: 14px;
       color: var(--secondary-text-color);
       margin-bottom: 16px;
-      max-width: 300px;
+      max-width: 300px; /* Prevent overly wide text */
       line-height: 1.4;
     }
     .preview-actions ha-button {

@@ -17,17 +17,8 @@ import { logDebug } from './utils/debug.js';
 import { getCardDescriptor } from './utils/helpers.js';
 import { ACTION_TYPE_OPTIONS } from './actions/action-types.js';
 import { getEditorStyles } from './styles/editor-styles.js';
-import { CARD_VERSION } from './index.js';
-
-// Simple fireEvent implementation
-const fireEvent = (node, type, detail = {}) => {
-  const event = new CustomEvent(type, {
-    detail,
-    bubbles: true,
-    composed: true
-  });
-  node.dispatchEvent(event);
-};
+import { CARD_VERSION } from './constants.js';
+import { fireEvent, hasConfigOrEntityChanged } from './utils/dependencies.js';
 
 /**
  * Enhanced editor for Actions Card
@@ -69,6 +60,13 @@ export class ActionsCardEditor extends LitElement {
     // Add debouncing for card picker loading
     this._cardPickerLoadingDebounce = null;
     this._cardPickerRetryCount = 0;
+  }
+
+  /**
+   * Standard HA pattern: Use shouldUpdate to prevent unnecessary re-renders
+   */
+  shouldUpdate(changedProps) {
+    return hasConfigOrEntityChanged(this, changedProps);
   }
 
   async connectedCallback() {
@@ -373,11 +371,6 @@ export class ActionsCardEditor extends LitElement {
       this._config.double_tap_action = { action: 'none' };
     }
 
-    // Initialize prevent_default_dialog if not set
-    if (this._config.prevent_default_dialog === undefined) {
-      this._config.prevent_default_dialog = false;
-    }
-
     // Only ensure card picker is loaded if no card is configured
     if (!this._config.card) {
       setTimeout(() => this._ensureCardPickerLoaded(), 50);
@@ -499,23 +492,14 @@ export class ActionsCardEditor extends LitElement {
   _fireConfigChangedWithFlags() {
     if (!this._config) return;
 
-    // Create a custom event with the editor ID and flags
-    const event = new CustomEvent('config-changed', {
-      detail: {
-        config: this._config,
-        editorId: this._editorId,
-        fromActionCardEditor: true,
-        preventDialogClose: true, // Add flag to prevent dialog closure
-        inEditorDialog: this._inEditorDialog
-      },
-      bubbles: false // Set to false to prevent automatic bubbling
+    // Use HA standard event firing
+    fireEvent(this, 'config-changed', {
+      config: this._config,
+      editorId: this._editorId,
+      fromActionCardEditor: true,
+      preventDialogClose: true,
+      inEditorDialog: this._inEditorDialog
     });
-
-    // Add property to event object to mark it
-    event._processedByActionsCardEditor = true;
-
-    logDebug('EVENT', 'Firing config-changed event with special flags');
-    this.dispatchEvent(event);
 
     // If in dialog, dispatch a more controlled event to update the parent config
     if (this._inEditorDialog) {
@@ -549,24 +533,16 @@ export class ActionsCardEditor extends LitElement {
   _fireConfigChanged() {
     if (!this._config) return;
 
-    // Create a custom event with the editor ID
-    const event = new CustomEvent('config-changed', {
-      detail: {
-        config: this._config,
-        editorId: this._editorId,
-        fromActionCardEditor: true,
-        inEditorDialog: this._inEditorDialog,
-        preventDialogClose: true
-      },
-      bubbles: true, // Allow it to bubble for proper handling
-      composed: true // Cross shadow DOM boundary
+    // Use HA standard event firing
+    fireEvent(this, 'config-changed', {
+      config: this._config,
+      editorId: this._editorId,
+      fromActionCardEditor: true,
+      inEditorDialog: this._inEditorDialog,
+      preventDialogClose: true
     });
 
-    // Add property to event object to mark it
-    event._processedByActionsCardEditor = true;
-
     logDebug('EVENT', 'Firing config-changed event with config:', this._config);
-    this.dispatchEvent(event);
   }
 
   /**

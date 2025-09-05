@@ -12,8 +12,12 @@ export default {
   output: {
     file: 'build/actions-card.js',
     format: 'es',
-    sourcemap: process.env.SOURCEMAP === 'true' // Only create maps when explicitly requested
+    sourcemap: process.env.SOURCEMAP === 'true', // Only create maps when explicitly requested
+    inlineDynamicImports: true // Fix for dynamic imports
   },
+  external: [
+    'hui-dialog-edit-card' // Mark as external to avoid bundling issues
+  ],
   plugins: [
     nodeResolve({
       browser: true,  // Optimize for browser environment

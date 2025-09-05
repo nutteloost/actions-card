@@ -18,16 +18,7 @@ import { loadCardHelpers } from './utils/helpers.js';
 import { ActionExecutor } from './actions/action-executor.js';
 import { getCardStyles } from './styles/card-styles.js';
 import { UI_CONSTANTS } from './actions/action-types.js';
-
-// Simple fireEvent implementation
-const fireEvent = (node, type, detail = {}) => {
-  const event = new CustomEvent(type, {
-    detail,
-    bubbles: true,
-    composed: true
-  });
-  node.dispatchEvent(event);
-};
+import { hasConfigOrEntityChanged, computeCardSize, fireEvent } from './utils/dependencies.js';
 
 /**
  * Actions Card - A custom card that wraps another card and adds tap, hold, and double tap actions
@@ -53,7 +44,6 @@ export class ActionsCard extends LitElement {
    * @returns {Object} Stub configuration
    */
   static getStubConfig() {
-    // Keep the stub config simple, the preview handles the initial state
     return {
       card: null, // Start with no card defined for the preview state
       tap_action: { action: 'none' },
@@ -82,6 +72,44 @@ export class ActionsCard extends LitElement {
 
     // Initialize action executor
     this._actionExecutor = null;
+
+    // Track current card config for comparison
+    this._currentCardConfig = null;
+  }
+
+  /**
+   * Standard HA pattern: Use shouldUpdate to prevent unnecessary re-renders
+   */
+  shouldUpdate(changedProps) {
+    return hasConfigOrEntityChanged(this, changedProps);
+  }
+
+  /**
+   * Standard HA pattern: Use willUpdate for pre-update calculations
+   */
+  willUpdate(changedProps) {
+    super.willUpdate(changedProps);
+
+    // Update action executor when config or child card changes
+    if (changedProps.has('config') || changedProps.has('_childCard')) {
+      if (this._actionExecutor) {
+        this._actionExecutor.config = this.config;
+        this._actionExecutor.childCard = this._childCard;
+      }
+    }
+
+    // Handle hass changes for child card
+    if (changedProps.has('hass') && this._childCard && this._childCard.hass !== this.hass) {
+      try {
+        this._childCard.hass = this.hass;
+      } catch (e) {
+        logDebug('ERROR', 'Error setting hass on child card:', e);
+        // Recreate card if hass assignment fails
+        if (this.config?.card) {
+          this._createCardElement(this.config.card);
+        }
+      }
+    }
   }
 
   /**
@@ -106,13 +134,8 @@ export class ActionsCard extends LitElement {
   setConfig(config) {
     logDebug('CONFIG', 'setConfig received:', JSON.stringify(config));
 
-    // Store the raw config
+    // Store the raw config without modification
     this.config = config;
-
-    // Initialize prevent_default_dialog if not set
-    if (this.config.prevent_default_dialog === undefined) {
-      this.config.prevent_default_dialog = false;
-    }
 
     // Initialize action executor with current config and child card
     this._actionExecutor = new ActionExecutor(this, null, this.config, this._childCard);
@@ -158,9 +181,6 @@ export class ActionsCard extends LitElement {
         throw new Error('Card configuration requires a `type`.');
       }
 
-      // Extract card_mod styles before creating the card
-      this._extractedCardModStyles = this._extractCardModStyles(actualCardConfig);
-
       const isCustomCard = cardType.startsWith('custom:');
 
       if (isCustomCard) {
@@ -182,27 +202,6 @@ export class ActionsCard extends LitElement {
     }
 
     this.requestUpdate();
-  }
-
-  /**
-   * Extract card_mod styles to apply them immediately
-   * @param {Object} cardConfig - Card configuration
-   * @returns {Object} Extracted styles
-   * @private
-   */
-  _extractCardModStyles(cardConfig) {
-    if (!cardConfig.card_mod?.style) return null;
-
-    const styleString = cardConfig.card_mod.style;
-    const styles = {};
-
-    // Extract height from card_mod style
-    const heightMatch = styleString.match(/height:\s*([^;!]+)/i);
-    if (heightMatch) {
-      styles.height = heightMatch[1].trim();
-    }
-
-    return Object.keys(styles).length > 0 ? styles : null;
   }
 
   /**
@@ -253,15 +252,7 @@ export class ActionsCard extends LitElement {
 
     // Force card_mod re-scan after child card creation
     setTimeout(() => {
-      if (window.cardmod) {
-        window.cardmod.process_card?.(this._childCard);
-      }
-      this.dispatchEvent(
-        new CustomEvent('card-mod-refresh', {
-          bubbles: true,
-          composed: true
-        })
-      );
+      this._triggerCardModRefresh();
     }, 100);
   }
 
@@ -326,7 +317,7 @@ export class ActionsCard extends LitElement {
       // Set config and hass
       element.setConfig(cardConfig);
       if (this.hass) {
-        element.hass = this.hass; // <-- Fixed: this.hass instead of hass
+        element.hass = this.hass;
       }
 
       // Update the internal state
@@ -348,15 +339,7 @@ export class ActionsCard extends LitElement {
         }
 
         // Force card_mod re-scan after child card creation
-        if (window.cardmod) {
-          window.cardmod.process_card?.(this._childCard);
-        }
-        this.dispatchEvent(
-          new CustomEvent('card-mod-refresh', {
-            bubbles: true,
-            composed: true
-          })
-        );
+        this._triggerCardModRefresh();
       }, 50);
     } catch (error) {
       logDebug('ERROR', `Error setting up card element: ${cardType}`, error);
@@ -575,6 +558,12 @@ export class ActionsCard extends LitElement {
     if (!this._childCard) {
       return 3;
     }
+
+    // Use HA helper if available
+    if (typeof computeCardSize === 'function') {
+      return computeCardSize(this._childCard);
+    }
+
     // Otherwise, delegate to the child card if possible
     if (this._childCard && typeof this._childCard.getCardSize === 'function') {
       try {
@@ -861,6 +850,22 @@ export class ActionsCard extends LitElement {
   }
 
   /**
+   * Trigger card-mod to process the child card
+   * @private
+   */
+  _triggerCardModRefresh() {
+    if (window.cardmod) {
+      window.cardmod.process_card?.(this._childCard);
+    }
+    this.dispatchEvent(
+      new CustomEvent('card-mod-refresh', {
+        bubbles: true,
+        composed: true
+      })
+    );
+  }
+
+  /**
    * Render the card UI
    * @returns {TemplateResult} HTML template
    */
@@ -889,13 +894,16 @@ export class ActionsCard extends LitElement {
       `;
     }
 
+    // Set default wrapper height
+    this.style.height = '100%';
+
     // Otherwise, render the wrapper and the child card
     const hasActions =
       this.config.tap_action?.action !== 'none' ||
       this.config.hold_action?.action !== 'none' ||
       this.config.double_tap_action?.action !== 'none';
 
-    const wrapperStyle = `cursor: ${hasActions ? 'pointer' : 'default'}; display: block;`;
+    const wrapperStyle = `cursor: ${hasActions ? 'pointer' : 'default'}; display: block; height: 100%;`;
 
     return html`
       <div
