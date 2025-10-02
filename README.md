@@ -6,14 +6,15 @@
 [![Reddit Profile](https://img.shields.io/badge/Reddit-My%20stuff-orange?logo=reddit)](https://www.reddit.com/user/nutteloost/submitted/)
 [![Home Assistant Community Forum](https://img.shields.io/badge/Home%20Assistant-Community%20Forum-blue?logo=home-assistant)](https://community.home-assistant.io/t/simple-swipe-card-a-custom-card-for-easy-card-navigation/888415)
 
-A custom card that wraps another card and adds tap, hold, and double tap actions.
+A custom card that wraps another card and adds tap, hold, double-tap, and swipe actions.
 
 <img src="https://raw.githubusercontent.com/nutteloost/actions-card/main/images/visual_editor_card_editor.png" width="750">
 
-Actions Card is a wrapper for any Home Assistant card that adds interactive functionality through tap, hold, and double-tap actions. This allows you to transform any standard or custom card into an interactive element without modifying the original card. With Actions Card, you can navigate to different views, toggle entities, call services, open URLs, and more - all from cards that normally don't support these interactions.
+**Actions Card** is a wrapper for any Home Assistant card that adds interactive gestures and actions. Transform any standard or custom card into an interactive element without modifying the original card. With Actions Card, you can navigate to different views, toggle entities, call services, open URLs, and more—all from cards that normally don't support these interactions.
 
 ## Features
-- Add tap, hold, and double-tap actions to any card
+- Add tap, hold, double-tap, and swipe actions to any card
+- Swipe gestures in four directions (left, right, up, down) with touch and mouse support
 - Multiple action types:
   - Toggle entities
   - Navigate to other views
@@ -24,6 +25,7 @@ Actions Card is a wrapper for any Home Assistant card that adds interactive func
   - Fire custom DOM events
 - Confirmation dialogs for actions
 - Configurable hold time
+- Smart scrolling: automatically preserves normal scrolling on scrollable content
 - Option to prevent default entity dialogs
 - Visual editor support with card picker
 - Works with both standard and custom cards
@@ -83,11 +85,15 @@ This card can be configured using the visual editor or YAML.
 ### Options
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
-| card | object | Required | The card configuration to wrap |
-| tap_action | object | `none` | Action to perform on tap |
-| hold_action | object | `none` | Action to perform on hold |
-| double_tap_action | object | `none` | Action to perform on double tap |
-| prevent_default_dialog | boolean | false | Prevent the default entity dialog from opening |
+| `card` | object | Required | The card configuration to wrap |
+| `tap_action` | object | `none` | Action to perform on tap |
+| `hold_action` | object | `none` | Action to perform on hold |
+| `double_tap_action` | object | `none` | Action to perform on double tap |
+| `swipe_left_action` | object | `none` | Action to perform on swipe left |
+| `swipe_right_action` | object | `none` | Action to perform on swipe right |
+| `swipe_up_action` | object | `none` | Action to perform on swipe up |
+| `swipe_down_action` | object | `none` | Action to perform on swipe down |
+| `prevent_default_dialog` | boolean | `false` | Prevent the default entity dialog from opening |
 
 ### Prevent Default Dialog Option
 
@@ -224,26 +230,45 @@ hold_action:
 *Hold Time Options:*
 - `hold_time`: Duration in milliseconds to hold before triggering (range: 100-2000ms, default: 500ms)
 
+
+---
+
+## Swipe Gestures
+
+Configure swipe actions in four directions: left, right, up, and down. Each swipe gesture can trigger any of the supported action types.
+
+### Swipe Behavior
+
+Swipe gestures work with both touch and mouse input, making them accessible on all devices. A swipe is detected when you quickly drag across the card—the gesture needs to cover at least 20 pixels and complete within one second. The direction is determined by the dominant axis of movement: if you swipe more horizontally than vertically, it registers as left or right; if you swipe more vertically, it registers as up or down.
+
+The card intelligently preserves normal scrolling behavior on scrollable content. When you try to swipe vertically on a card with scrollable content (like a long list), the swipe action is automatically disabled in that direction, allowing you to scroll naturally. The same applies to horizontal swipes on horizontally scrollable content. This ensures your swipe actions never interfere with basic navigation.
+
 ### Example Configuration
 ```yaml
 type: custom:actions-card
 card:
   type: entities
-  title: Lights
   entities:
     - light.living_room
-    - light.kitchen
     - light.bedroom
-tap_action:
-  action: toggle
-hold_action:
-  action: more-info
-  confirmation: Are you sure you want to see more info?
-double_tap_action:
+swipe_left_action:
   action: navigate
-  navigation_path: /lovelace/lights
-prevent_default_dialog: true
-```
+  navigation_path: /lovelace/1
+swipe_right_action:
+  action: navigate
+  navigation_path: /lovelace/0
+swipe_up_action:
+  action: call-service
+  service: light.turn_on
+  service_data:
+    entity_id: all
+swipe_down_action:
+  action: call-service
+  service: light.turn_off
+  service_data:
+    entity_id: all
+  confirmation: "Turn off all lights?"
+  ```
 
 ### Advanced Examples
 
@@ -270,9 +295,21 @@ hold_action:
   confirmation:
     text: "Turn off all lights?"
     title: "Confirm Action"
+    confirm_text: "Yes, turn off"
+    dismiss_text: "Cancel"
 double_tap_action:
   action: navigate
   navigation_path: /lovelace/scenes
+swipe_left_action:
+  action: call-service
+  service: scene.turn_on
+  service_data:
+    entity_id: scene.romantic
+swipe_right_action:
+  action: call-service
+  service: scene.turn_on
+  service_data:
+    entity_id: scene.bright
 prevent_default_dialog: true
 ```
 </details>
@@ -302,6 +339,18 @@ hold_action:
   service_data:
     entity_id: all
   confirmation: "Turn off all lights in the house?"
+swipe_up_action:
+  action: call-service
+  service: light.turn_on
+  service_data:
+    entity_id: all
+    brightness: 255
+swipe_down_action:
+  action: call-service
+  service: light.turn_on
+  service_data:
+    entity_id: all
+    brightness: 50
 ```
 </details>
 <details>

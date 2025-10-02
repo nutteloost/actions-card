@@ -30,8 +30,8 @@ export class ActionExecutor {
   }
 
   /**
-   * Handles different action types (tap, hold, double-tap)
-   * @param {string} actionType - Type of action to handle ('tap', 'hold', 'double_tap')
+   * Handles different action types (tap, hold, double-tap, swipe)
+   * @param {string} actionType - Type of action to handle ('tap', 'hold', 'double_tap', 'swipe_left', 'swipe_right', 'swipe_up', 'swipe_down')
    */
   handleAction(actionType = 'tap') {
     const actionConfig = this.config[`${actionType}_action`];

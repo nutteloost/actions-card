@@ -35,7 +35,9 @@ export class ActionsCardEditor extends LitElement {
     return {
       hass: { type: Object },
       _config: { type: Object, state: true },
-      lovelace: { type: Object }
+      lovelace: { type: Object },
+      _actionsExpanded: { type: Boolean, state: true },
+      _swipeActionsExpanded: { type: Boolean, state: true }
     };
   }
 
@@ -60,6 +62,10 @@ export class ActionsCardEditor extends LitElement {
     // Add debouncing for card picker loading
     this._cardPickerLoadingDebounce = null;
     this._cardPickerRetryCount = 0;
+
+    // Initialize expansion panel states - Actions open by default
+    this._actionsExpanded = false;
+    this._swipeActionsExpanded = false;
   }
 
   /**
@@ -358,25 +364,52 @@ export class ActionsCardEditor extends LitElement {
     logDebug('CONFIG', 'Editor setConfig received:', JSON.stringify(config));
     this._config = JSON.parse(JSON.stringify(config));
 
-    // Initialize default values if not set
-    if (!this._config.tap_action) {
-      this._config.tap_action = { action: 'none' };
-    }
-
-    if (!this._config.hold_action) {
-      this._config.hold_action = { action: 'none' };
-    }
-
-    if (!this._config.double_tap_action) {
-      this._config.double_tap_action = { action: 'none' };
-    }
-
-    // Only ensure card picker is loaded if no card is configured
     if (!this._config.card) {
       setTimeout(() => this._ensureCardPickerLoaded(), 50);
     }
   }
 
+  /**
+   * Clean configuration by removing actions with default values
+   * @param {Object} config - Configuration to clean
+   * @returns {Object} Cleaned configuration
+   * @private
+   */
+  _cleanConfig(config) {
+    const cleaned = { ...config };
+
+    // List of action keys to check
+    const actionKeys = [
+      'tap_action',
+      'hold_action',
+      'double_tap_action',
+      'swipe_left_action',
+      'swipe_right_action',
+      'swipe_up_action',
+      'swipe_down_action'
+    ];
+
+    // Remove actions that are set to 'none' or are default values
+    actionKeys.forEach((key) => {
+      if (cleaned[key]) {
+        // Remove if action is 'none' and no other properties
+        if (cleaned[key].action === 'none' && Object.keys(cleaned[key]).length === 1) {
+          delete cleaned[key];
+        }
+        // Also remove if it's an empty object
+        else if (Object.keys(cleaned[key]).length === 0) {
+          delete cleaned[key];
+        }
+      }
+    });
+
+    // Remove prevent_default_dialog if it's false (default value)
+    if (cleaned.prevent_default_dialog === false) {
+      delete cleaned.prevent_default_dialog;
+    }
+
+    return cleaned;
+  }
   /**
    * Clean up action configuration by removing properties not relevant to the action type
    * Ensures configuration objects only contain valid properties for their action type,
@@ -492,9 +525,12 @@ export class ActionsCardEditor extends LitElement {
   _fireConfigChangedWithFlags() {
     if (!this._config) return;
 
+    // Clean the config before firing the event
+    const cleanedConfig = this._cleanConfig(this._config);
+
     // Use HA standard event firing
     fireEvent(this, 'config-changed', {
-      config: this._config,
+      config: cleanedConfig,
       editorId: this._editorId,
       fromActionCardEditor: true,
       preventDialogClose: true,
@@ -503,7 +539,6 @@ export class ActionsCardEditor extends LitElement {
 
     // If in dialog, dispatch a more controlled event to update the parent config
     if (this._inEditorDialog) {
-      // Find the dialog
       let parent = this.parentNode;
       let dialog = null;
       while (parent) {
@@ -517,7 +552,7 @@ export class ActionsCardEditor extends LitElement {
       if (dialog && typeof dialog._updateConfig === 'function') {
         logDebug('EVENT', 'Directly updating dialog config');
         try {
-          dialog._updateConfig(this._config);
+          dialog._updateConfig(cleanedConfig);
         } catch (e) {
           console.error('Error updating dialog config:', e);
         }
@@ -572,6 +607,53 @@ export class ActionsCardEditor extends LitElement {
 
     // Stop event propagation to prevent editor issues
     if (ev.stopPropagation) ev.stopPropagation();
+  }
+
+  /**
+   * Handle expansion panel changes for accordion behavior
+   * @param {string} panelName - Name of the panel ('actions' or 'swipe')
+   * @param {Event} e - Expanded changed event
+   * @private
+   */
+  _handlePanelExpanded(panelName, e) {
+    e.stopPropagation();
+    const isExpanded = e.detail.value;
+
+    if (!isExpanded) {
+      // Panel is collapsing - just update state
+      if (panelName === 'actions') {
+        this._actionsExpanded = false;
+      } else if (panelName === 'swipe') {
+        this._swipeActionsExpanded = false;
+      }
+
+      // Remove focus to clear the highlight color
+      if (e.target && e.target.blur) {
+        e.target.blur();
+      }
+
+      return;
+    }
+
+    // Panel is expanding - implement accordion behavior
+    // Close ALL panels first (like todo-swipe-card does)
+    this._actionsExpanded = false;
+    this._swipeActionsExpanded = false;
+
+    // Then open the requested one
+    if (panelName === 'actions') {
+      this._actionsExpanded = true;
+    } else if (panelName === 'swipe') {
+      this._swipeActionsExpanded = true;
+    }
+
+    // Force a complete re-render
+    this.requestUpdate();
+
+    // Also schedule another update to ensure panels sync properly
+    setTimeout(() => {
+      this.requestUpdate();
+    }, 10);
   }
 
   /**
@@ -749,7 +831,6 @@ export class ActionsCardEditor extends LitElement {
       <div class="option-row">
         <div class="option-label">${title}</div>
         <ha-select
-          label="Action"
           .value=${actionConfig.action || 'none'}
           data-option="${actionType}"
           @selected=${this._valueChanged}
@@ -964,6 +1045,76 @@ export class ActionsCardEditor extends LitElement {
   }
 
   /**
+   * Render the swipe actions configuration section
+   * @returns {TemplateResult} Swipe actions configuration template
+   * @private
+   */
+  _renderSwipeActionsConfiguration() {
+    // Use || for safe defaults when rendering
+    const swipeLeftAction = this._config.swipe_left_action || { action: 'none' };
+    const swipeRightAction = this._config.swipe_right_action || { action: 'none' };
+    const swipeUpAction = this._config.swipe_up_action || { action: 'none' };
+    const swipeDownAction = this._config.swipe_down_action || { action: 'none' };
+
+    return html`
+      <ha-expansion-panel
+        .expanded=${this._swipeActionsExpanded}
+        @expanded-changed=${(e) => {
+          e.stopPropagation();
+          this._handlePanelExpanded('swipe', e);
+        }}
+      >
+        <div slot="header" role="heading" aria-level="3">
+          <ha-icon icon="mdi:gesture-swipe"></ha-icon>
+          Swipe Actions
+        </div>
+
+        <div class="section">
+          <div class="action-container">
+            <div class="section-header">
+              <ha-icon icon="mdi:arrow-left" style="margin-right: 8px;"></ha-icon>
+              Swipe Left
+            </div>
+            ${this._renderActionTypeDropdown('swipe_left_action', swipeLeftAction)}
+            ${this._renderActionDetails('swipe_left_action', swipeLeftAction)}
+            ${this._renderConfirmationConfig('swipe_left_action', swipeLeftAction)}
+          </div>
+
+          <div class="action-container">
+            <div class="section-header">
+              <ha-icon icon="mdi:arrow-right" style="margin-right: 8px;"></ha-icon>
+              Swipe Right
+            </div>
+            ${this._renderActionTypeDropdown('swipe_right_action', swipeRightAction)}
+            ${this._renderActionDetails('swipe_right_action', swipeRightAction)}
+            ${this._renderConfirmationConfig('swipe_right_action', swipeRightAction)}
+          </div>
+
+          <div class="action-container">
+            <div class="section-header">
+              <ha-icon icon="mdi:arrow-up" style="margin-right: 8px;"></ha-icon>
+              Swipe Up
+            </div>
+            ${this._renderActionTypeDropdown('swipe_up_action', swipeUpAction)}
+            ${this._renderActionDetails('swipe_up_action', swipeUpAction)}
+            ${this._renderConfirmationConfig('swipe_up_action', swipeUpAction)}
+          </div>
+
+          <div class="action-container">
+            <div class="section-header">
+              <ha-icon icon="mdi:arrow-down" style="margin-right: 8px;"></ha-icon>
+              Swipe Down
+            </div>
+            ${this._renderActionTypeDropdown('swipe_down_action', swipeDownAction)}
+            ${this._renderActionDetails('swipe_down_action', swipeDownAction)}
+            ${this._renderConfirmationConfig('swipe_down_action', swipeDownAction)}
+          </div>
+        </div>
+      </ha-expansion-panel>
+    `;
+  }
+
+  /**
    * Renders the confirmation options for an action
    * @param {string} actionType - The action type (tap, hold, double_tap)
    * @param {Object} actionConfig - The current action configuration
@@ -1143,7 +1294,7 @@ export class ActionsCardEditor extends LitElement {
       <div class="card-config" @keydown=${(e) => (e._processedByActionsCardEditor = true)}>
         ${this._renderInfoPanel()} ${this._renderCardManagement()} ${this._renderCardPicker()}
         ${this._renderGeneralOptions()} ${this._renderActionsConfiguration()}
-        ${this._renderFooter()}
+        ${this._renderSwipeActionsConfiguration()} ${this._renderFooter()}
       </div>
     `;
   }
@@ -1158,8 +1309,8 @@ export class ActionsCardEditor extends LitElement {
       <div class="info-panel">
         <div class="info-icon">i</div>
         <div class="info-text">
-          This card wraps another card to add tap, hold, and double-tap actions. First, select a
-          card to wrap below, then configure the actions you want to enable.
+          This card wraps another card to add tap, hold, double-tap actions and/or swipe actions.
+          First, select a card to wrap below, then configure the actions you want to enable.
         </div>
       </div>
     `;
@@ -1277,35 +1428,57 @@ export class ActionsCardEditor extends LitElement {
    * @private
    */
   _renderActionsConfiguration() {
+    // Use || for safe defaults when rendering
     const tapAction = this._config.tap_action || { action: 'none' };
     const holdAction = this._config.hold_action || { action: 'none' };
-    const doubleTapAction = this._config.double_tap_action || {
-      action: 'none'
-    };
+    const doubleTapAction = this._config.double_tap_action || { action: 'none' };
 
     return html`
-      <div class="section">
-        <div class="section-header">Actions</div>
-
-        <div class="action-container">
-          ${this._renderActionTypeDropdown('tap_action', tapAction)}
-          ${this._renderActionDetails('tap_action', tapAction)}
-          ${this._renderConfirmationConfig('tap_action', tapAction)}
+      <ha-expansion-panel
+        .expanded=${this._actionsExpanded}
+        @expanded-changed=${(e) => {
+          e.stopPropagation();
+          this._handlePanelExpanded('actions', e);
+        }}
+      >
+        <div slot="header" role="heading" aria-level="3">
+          <ha-icon icon="mdi:gesture-tap"></ha-icon>
+          Actions
         </div>
 
-        <div class="action-container">
-          ${this._renderActionTypeDropdown('hold_action', holdAction)}
-          ${this._renderActionDetails('hold_action', holdAction)}
-          ${this._renderHoldTimeConfig(holdAction)}
-          ${this._renderConfirmationConfig('hold_action', holdAction)}
-        </div>
+        <div class="section">
+          <div class="action-container">
+            <div class="section-header">
+              <ha-icon icon="mdi:gesture-tap" style="margin-right: 8px;"></ha-icon>
+              Tap Action
+            </div>
+            ${this._renderActionTypeDropdown('tap_action', tapAction)}
+            ${this._renderActionDetails('tap_action', tapAction)}
+            ${this._renderConfirmationConfig('tap_action', tapAction)}
+          </div>
 
-        <div class="action-container">
-          ${this._renderActionTypeDropdown('double_tap_action', doubleTapAction)}
-          ${this._renderActionDetails('double_tap_action', doubleTapAction)}
-          ${this._renderConfirmationConfig('double_tap_action', doubleTapAction)}
+          <div class="action-container">
+            <div class="section-header">
+              <ha-icon icon="mdi:gesture-tap-hold" style="margin-right: 8px;"></ha-icon>
+              Hold Action
+            </div>
+            ${this._renderActionTypeDropdown('hold_action', holdAction)}
+            ${this._renderActionDetails('hold_action', holdAction)}
+            ${this._renderHoldTimeConfig(holdAction)}
+            ${this._renderConfirmationConfig('hold_action', holdAction)}
+          </div>
+
+          <div class="action-container">
+            <div class="section-header">
+              <ha-icon icon="mdi:gesture-double-tap" style="margin-right: 8px;"></ha-icon>
+              Double Tap Action
+            </div>
+            ${this._renderActionTypeDropdown('double_tap_action', doubleTapAction)}
+            ${this._renderActionDetails('double_tap_action', doubleTapAction)}
+            ${this._renderConfirmationConfig('double_tap_action', doubleTapAction)}
+          </div>
         </div>
-      </div>
+      </ha-expansion-panel>
     `;
   }
 
@@ -1336,6 +1509,23 @@ export class ActionsCardEditor extends LitElement {
 
   updated(changedProperties) {
     super.updated(changedProperties);
+
+    // Handle expansion state changes
+    if (
+      changedProperties.has('_actionsExpanded') ||
+      changedProperties.has('_swipeActionsExpanded')
+    ) {
+      // Force the expansion panels to update their state
+      const actionPanel = this.shadowRoot?.querySelector('ha-expansion-panel');
+      const swipePanel = this.shadowRoot?.querySelectorAll('ha-expansion-panel')[1];
+
+      if (actionPanel && this._actionsExpanded !== undefined) {
+        actionPanel.expanded = this._actionsExpanded;
+      }
+      if (swipePanel && this._swipeActionsExpanded !== undefined) {
+        swipePanel.expanded = this._swipeActionsExpanded;
+      }
+    }
 
     // Only ensure card picker is loaded when config changes AND no card is configured
     // Use immediate loading if showing picker after removal

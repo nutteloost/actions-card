@@ -1,9 +1,4 @@
 /**
- * Action Type Definitions
- * Defines all supported action types, configurations, and timing constants
- */
-
-/**
  * Supported action types
  */
 export const ACTION_TYPES = {
@@ -60,7 +55,9 @@ export const INTERACTIVE_TAGS = [
 export const DEFAULT_TIMINGS = {
   HOLD_TIME: 500,
   DOUBLE_TAP_TIMEOUT: 250,
-  MOVEMENT_THRESHOLD: 10
+  MOVEMENT_THRESHOLD: 10,
+  SWIPE_THRESHOLD: 20,
+  SWIPE_MAX_DURATION: 1000
 };
 
 /**
@@ -74,4 +71,14 @@ export const UI_CONSTANTS = {
   MAX_CARD_CREATION_RETRIES: 10,
   PICKER_UPDATE_DELAY: 50,
   CONFIRMATION_DIALOG_CLEANUP_DELAY: 100
+};
+
+/**
+ * Swipe direction types
+ */
+export const SWIPE_DIRECTIONS = {
+  LEFT: 'left',
+  RIGHT: 'right',
+  UP: 'up',
+  DOWN: 'down'
 };

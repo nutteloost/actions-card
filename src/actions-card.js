@@ -63,18 +63,25 @@ export class ActionsCard extends LitElement {
     this._holdTriggered = false;
     this._clickCount = 0;
     this._lastActionTime = 0;
-    this._childCard = null; // Initialize as null
-    this.config = {}; // Initialize config
-    this._childCardClickHandler = null; // Track the click handler
-
-    // Initialize card helpers
+    this._childCard = null;
+    this.config = {};
+    this._childCardClickHandler = null;
     this._cardHelpers = null;
-
-    // Initialize action executor
     this._actionExecutor = null;
-
-    // Track current card config for comparison
     this._currentCardConfig = null;
+
+    // Add swipe tracking
+    this._swipeStartTime = 0;
+    this._swipeInProgress = false;
+    this._isWindowTracked = false;
+    this._processingPointerUp = false;
+    this._isClickBlocked = false; // NEW: Block clicks after swipe
+    this._clickBlockTimer = null; // NEW: Timer for click blocking
+
+    // Bound handlers for window-level listeners
+    this._boundOnPointerMove = this._onPointerMove.bind(this);
+    this._boundOnPointerUp = this._onPointerUp.bind(this);
+    this._boundPreventClick = this._preventClick.bind(this); // NEW: Bound click preventer
   }
 
   /**
@@ -134,30 +141,24 @@ export class ActionsCard extends LitElement {
   setConfig(config) {
     logDebug('CONFIG', 'setConfig received:', JSON.stringify(config));
 
-    // Store the raw config without modification
     this.config = config;
 
-    // Initialize action executor with current config and child card
     this._actionExecutor = new ActionExecutor(this, null, this.config, this._childCard);
 
-    // Only attempt to create the card element if a card config exists
     if (config && config.card) {
-      // Check if the card config itself actually changed to avoid unnecessary rebuilds
       if (
         !this._childCard ||
         JSON.stringify(this._currentCardConfig) !== JSON.stringify(config.card)
       ) {
-        this._currentCardConfig = JSON.parse(JSON.stringify(config.card)); // Store a copy
-        // Make this async since we're now using card helpers
+        this._currentCardConfig = JSON.parse(JSON.stringify(config.card));
         this._createCardElement(config.card).catch((e) => {
           logDebug('ERROR', 'Error in async card creation:', e);
         });
       }
     } else {
-      // If no card config, ensure _childCard is null to show preview
       this._childCard = null;
       this._currentCardConfig = null;
-      this.requestUpdate(); // Ensure render is called
+      this.requestUpdate();
     }
   }
 
@@ -395,6 +396,42 @@ export class ActionsCard extends LitElement {
   }
 
   /**
+   * Prevents click events from reaching child card after swipe
+   * @param {Event} e - Click event to prevent
+   * @private
+   */
+  _preventClick(e) {
+    if (this._isClickBlocked || this._swipeInProgress) {
+      logDebug('ACTION', 'Click prevented after swipe gesture');
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      return false;
+    }
+  }
+
+  /**
+   * Blocks clicks for a specified duration
+   * @param {number} duration - Duration to block clicks in milliseconds
+   * @private
+   */
+  _blockClicksTemporarily(duration = 300) {
+    this._isClickBlocked = true;
+
+    if (this._clickBlockTimer) {
+      clearTimeout(this._clickBlockTimer);
+    }
+
+    this._clickBlockTimer = setTimeout(() => {
+      this._isClickBlocked = false;
+      this._clickBlockTimer = null;
+      logDebug('ACTION', 'Click blocking period ended');
+    }, duration);
+
+    logDebug('ACTION', `Blocking clicks for ${duration}ms`);
+  }
+
+  /**
    * Enhanced method to prevent default dialogs from the wrapped card
    * Sets up comprehensive event interception to block click, tap, and hass-more-info events
    * that would normally trigger entity information dialogs. Uses capture phase event handling
@@ -623,6 +660,16 @@ export class ActionsCard extends LitElement {
   disconnectedCallback() {
     super.disconnectedCallback();
     this._cleanupDefaultDialogPrevention();
+
+    // Clean up window listeners
+    window.removeEventListener('pointermove', this._boundOnPointerMove);
+    window.removeEventListener('pointerup', this._boundOnPointerUp);
+
+    // Clean up click block timer
+    if (this._clickBlockTimer) {
+      clearTimeout(this._clickBlockTimer);
+      this._clickBlockTimer = null;
+    }
   }
 
   /**
@@ -645,8 +692,14 @@ export class ActionsCard extends LitElement {
    * @private
    */
   _resetState(ev) {
-    // Prevent nested actions-cards from clearing each other's state if event bubbles
     if (ev) ev.stopPropagation();
+
+    // Clean up window-level listeners
+    if (this._isWindowTracked) {
+      window.removeEventListener('pointermove', this._boundOnPointerMove);
+      window.removeEventListener('pointerup', this._boundOnPointerUp);
+      this._isWindowTracked = false;
+    }
 
     clearTimeout(this._holdTimeout);
     clearTimeout(this._clickTimeout);
@@ -654,6 +707,12 @@ export class ActionsCard extends LitElement {
     this._clickTimeout = null;
     this._holdTriggered = false;
     this._clickCount = 0;
+    this._swipeInProgress = false;
+    this._swipeStartTime = 0;
+    this._pointerType = null;
+    this._processingPointerUp = false;
+
+    // Note: Don't clear _isClickBlocked here - let the timer handle it
   }
 
   /**
@@ -663,7 +722,6 @@ export class ActionsCard extends LitElement {
    */
   _onPointerDown(ev) {
     // Allow interaction with elements inside the child card (e.g., sliders, buttons)
-    // Check if the event target is an interactive element or inside one.
     const interactiveTags = [
       'INPUT',
       'BUTTON',
@@ -682,7 +740,6 @@ export class ActionsCard extends LitElement {
         interactiveTags.includes(targetElement.tagName) ||
         targetElement.hasAttribute('actions-card-interactive')
       ) {
-        // Don't handle pointer down if on an interactive element
         logDebug('ACTION', 'Pointer down ignored (interactive element):', targetElement.tagName);
         return;
       }
@@ -691,30 +748,41 @@ export class ActionsCard extends LitElement {
 
     if (ev.button !== 0 && ev.pointerType === 'mouse') {
       logDebug('ACTION', 'Pointer down ignored (not primary button)');
-      return; // Only main mouse button
+      return;
     }
 
     ev.stopPropagation();
-    this._startX = ev.clientX; // Store start position for drag detection
+    this._startX = ev.clientX;
     this._startY = ev.clientY;
+    this._swipeStartTime = Date.now();
+    this._swipeInProgress = false;
+    this._pointerType = ev.pointerType;
 
-    clearTimeout(this._holdTimeout); // Clear previous timer
-    this._holdTriggered = false; // Reset hold flag
+    clearTimeout(this._holdTimeout);
+    this._holdTriggered = false;
+
+    // Attach window-level listeners for mouse to track movement outside element
+    if (ev.pointerType === 'mouse') {
+      logDebug('ACTION', 'Attaching pointermove/pointerup listeners to window');
+      this._isWindowTracked = true; // Set flag
+      window.addEventListener('pointermove', this._boundOnPointerMove);
+      window.addEventListener('pointerup', this._boundOnPointerUp);
+    } else {
+      this._isWindowTracked = false; // Touch events use element-level only
+    }
 
     if (this.config.hold_action && this.config.hold_action.action !== 'none') {
       logDebug('ACTION', 'Starting hold timer');
       this._holdTimeout = window.setTimeout(() => {
-        // Check if pointer moved significantly (drag/scroll) before triggering hold
         if (Math.abs(ev.clientX - this._startX) < 10 && Math.abs(ev.clientY - this._startY) < 10) {
           this._holdTriggered = true;
           this._handleAction('hold');
-          // Reset click count after hold is triggered to prevent tap action
           this._clickCount = 0;
         } else {
           logDebug('ACTION', 'Hold canceled (moved too much)');
-          this._resetState(); // Reset if moved too much
+          this._resetState();
         }
-      }, this.config.hold_action.hold_time || 500); // Configurable hold time
+      }, this.config.hold_action.hold_time || 500);
     }
   }
 
@@ -724,27 +792,96 @@ export class ActionsCard extends LitElement {
    * @private
    */
   _onPointerUp(ev) {
+    // Prevent double-processing if both window and element handlers fire
+    if (this._processingPointerUp) {
+      logDebug('ACTION', 'Pointer up already being processed, ignoring duplicate');
+      return;
+    }
+
+    // If this is element-level pointerup during a window-tracked gesture, ignore it
+    if (this._isWindowTracked && ev.currentTarget !== window) {
+      logDebug('ACTION', 'Element-level pointer up ignored (window-tracked gesture)');
+      return;
+    }
+
     if (ev.button !== 0 && ev.pointerType === 'mouse') {
       logDebug('ACTION', 'Pointer up ignored (not primary button)');
       return;
     }
 
+    // Set processing lock
+    this._processingPointerUp = true;
+
+    // Remove window-level listeners if they were added
+    if (this._pointerType === 'mouse' && this._isWindowTracked) {
+      logDebug('ACTION', 'Removing pointermove/pointerup listeners from window');
+      window.removeEventListener('pointermove', this._boundOnPointerMove);
+      window.removeEventListener('pointerup', this._boundOnPointerUp);
+      this._isWindowTracked = false;
+    }
+
     ev.stopPropagation();
 
-    // Only prevent default behavior if explicitly configured to do so
     if (this.config.prevent_default_dialog) {
       ev.preventDefault();
     }
 
-    // Significant movement cancels tap/double-tap
-    const moved =
-      Math.abs(ev.clientX - this._startX) > 10 || Math.abs(ev.clientY - this._startY) > 10;
+    const deltaX = ev.clientX - this._startX;
+    const deltaY = ev.clientY - this._startY;
+    const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
 
-    clearTimeout(this._holdTimeout); // Always clear hold timeout on pointer up
+    clearTimeout(this._holdTimeout);
 
-    if (this._holdTriggered || moved) {
-      // If hold was already triggered or pointer moved significantly, reset everything
-      logDebug('ACTION', 'Tap canceled (hold already triggered or moved too much)');
+    if (this._holdTriggered) {
+      logDebug('ACTION', 'Tap/swipe canceled (hold already triggered)');
+      this._resetState();
+      return;
+    }
+
+    // Check for swipe first (takes precedence over tap if movement is significant)
+    const swipeDirection = this._detectSwipe(
+      this._startX,
+      this._startY,
+      ev.clientX,
+      ev.clientY,
+      this._swipeStartTime,
+      ev.target
+    );
+
+    if (swipeDirection) {
+      const swipeActionKey = `swipe_${swipeDirection}_action`;
+      if (this.config[swipeActionKey] && this.config[swipeActionKey].action !== 'none') {
+        logDebug('ACTION', `Swipe detected: ${swipeDirection}`);
+        this._swipeInProgress = true;
+
+        // CRITICAL: Stop event propagation immediately to prevent child card from responding
+        ev.stopImmediatePropagation();
+
+        // CRITICAL: Block clicks BEFORE handling the action
+        this._blockClicksTemporarily(300);
+
+        // CRITICAL: Always suppress child card events during swipe, regardless of prevent_default_dialog setting
+        // This prevents the child card from opening its own dialogs
+        this._suppressChildCardEvents(300);
+
+        // Now execute the configured swipe action
+        this._handleAction(`swipe_${swipeDirection}`);
+
+        this._resetState();
+        return;
+      }
+    }
+
+    // If no swipe or swipe not configured, check for tap/double-tap
+    const moved = distance > 10;
+
+    if (moved && !swipeDirection) {
+      logDebug('ACTION', 'Movement detected but no swipe action configured');
+      this._resetState();
+      return;
+    }
+
+    if (moved) {
       this._resetState();
       return;
     }
@@ -753,43 +890,53 @@ export class ActionsCard extends LitElement {
     this._clickCount++;
     logDebug('ACTION', `Click count: ${this._clickCount}`);
 
-    // Only suppress child card events when explicitly preventing default dialogs
     if (this.config.prevent_default_dialog) {
       this._suppressChildCardEvents(300);
     }
 
     if (this.config.double_tap_action && this.config.double_tap_action.action !== 'none') {
-      // If double_tap is configured, wait for a potential second tap
       if (this._clickCount === 1) {
         logDebug('ACTION', 'Waiting for potential second tap');
         this._clickTimeout = window.setTimeout(() => {
-          // Double-check that we haven't processed a double-tap in the meantime
           if (this._clickCount === 1 && !this._holdTriggered) {
             logDebug('ACTION', 'Single tap confirmed (after double-tap timeout)');
-
-            // Only handle custom tap action if it's not 'none'
             if (this.config.tap_action?.action !== 'none') {
               this._handleAction('tap');
             }
           }
-          this._resetState(); // Reset after action or timeout
-        }, 250); // Standard double-click timeout
+          this._resetState();
+        }, 250);
       } else if (this._clickCount === 2) {
         logDebug('ACTION', 'Double tap detected');
-        clearTimeout(this._clickTimeout); // Cancel the single tap timeout
-        this._clickTimeout = null; // Explicitly set to null to ensure it's cleared
+        clearTimeout(this._clickTimeout);
+        this._clickTimeout = null;
         this._handleAction('double_tap');
-        this._resetState(); // Reset after double tap action
+        this._resetState();
       }
     } else {
-      // If double_tap is not configured, any click is a single tap
       logDebug('ACTION', 'Single tap (double tap not configured)');
-
-      // Only handle custom tap action if it's not 'none'
       if (this.config.tap_action?.action !== 'none') {
         this._handleAction('tap');
       }
-      this._resetState(); // Reset after tap action
+      this._resetState();
+    }
+  }
+
+  /**
+   * Handle pointer move event (only called for window-level mouse tracking)
+   * @param {Event} ev - Pointer move event
+   * @private
+   */
+  _onPointerMove(ev) {
+    // Cancel hold if moved too much
+    const deltaX = ev.clientX - this._startX;
+    const deltaY = ev.clientY - this._startY;
+    const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+
+    if (distance > 10 && this._holdTimeout) {
+      clearTimeout(this._holdTimeout);
+      this._holdTimeout = null;
+      logDebug('ACTION', 'Hold canceled during move');
     }
   }
 
@@ -866,42 +1013,134 @@ export class ActionsCard extends LitElement {
   }
 
   /**
+   * Detect swipe direction from pointer movement
+   * @param {number} startX - Starting X coordinate
+   * @param {number} startY - Starting Y coordinate
+   * @param {number} endX - Ending X coordinate
+   * @param {number} endY - Ending Y coordinate
+   * @param {number} startTime - Swipe start timestamp
+   * @param {HTMLElement} target - Event target for scrollable check
+   * @returns {string|null} Swipe direction or null
+   * @private
+   */
+  _detectSwipe(startX, startY, endX, endY, startTime, target) {
+    const deltaX = endX - startX;
+    const deltaY = endY - startY;
+    const absX = Math.abs(deltaX);
+    const absY = Math.abs(deltaY);
+    const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+    const duration = Date.now() - startTime;
+
+    // Check if swipe meets minimum distance
+    if (distance < 20) {
+      logDebug('ACTION', 'Movement too short for swipe:', distance);
+      return null;
+    }
+
+    // Check if swipe completed within maximum duration
+    if (duration > 1000) {
+      logDebug('ACTION', 'Movement too slow for swipe:', duration);
+      return null;
+    }
+
+    // Check if target element or ancestor is scrollable
+    const scrollableInfo = this._isScrollableElement(target);
+
+    // Determine direction based on dominant axis
+    if (absX > absY) {
+      // Horizontal swipe
+      if (scrollableInfo.horizontal) {
+        logDebug('ACTION', 'Horizontal swipe blocked by scrollable element');
+        return null;
+      }
+      return deltaX > 0 ? 'right' : 'left';
+    } else {
+      // Vertical swipe
+      if (scrollableInfo.vertical) {
+        logDebug('ACTION', 'Vertical swipe blocked by scrollable element');
+        return null;
+      }
+      return deltaY > 0 ? 'down' : 'up';
+    }
+  }
+
+  /**
+   * Check if element or ancestor is scrollable
+   * @param {HTMLElement} element - Element to check
+   * @returns {Object} Object with horizontal and vertical scrollable flags
+   * @private
+   */
+  _isScrollableElement(element) {
+    let current = element;
+    const result = { horizontal: false, vertical: false };
+
+    while (current && current !== this) {
+      const style = window.getComputedStyle(current);
+      const overflowX = style.overflowX;
+      const overflowY = style.overflowY;
+
+      // Check for horizontal scrolling
+      if (
+        (overflowX === 'scroll' || overflowX === 'auto') &&
+        current.scrollWidth > current.clientWidth
+      ) {
+        result.horizontal = true;
+      }
+
+      // Check for vertical scrolling
+      if (
+        (overflowY === 'scroll' || overflowY === 'auto') &&
+        current.scrollHeight > current.clientHeight
+      ) {
+        result.vertical = true;
+      }
+
+      current = current.parentElement || current.getRootNode()?.host;
+    }
+
+    return result;
+  }
+
+  /**
    * Render the card UI
    * @returns {TemplateResult} HTML template
    */
   render() {
-    // If no child card is configured or created, show the preview
-    if (!this._childCard) {
-      logDebug('INIT', 'Rendering preview container');
+    if (!this.hass) {
+      return html``;
+    }
+
+    if (!this.config || !this.config.card) {
       return html`
-        <div class="preview-container">
-          <div class="preview-icon-container">
-            <ha-icon icon="mdi:gesture-tap-hold"></ha-icon>
-          </div>
-          <div class="preview-text-container">
-            <div class="preview-title">Actions Card</div>
-            <div class="preview-description">
-              Wrap another card to add tap, hold, or double tap actions. Configure the card to wrap
-              below.
+        <div class="card-config-missing">
+          <div class="preview-container">
+            <div class="preview-icon">
+              <ha-icon icon="mdi:gesture-tap"></ha-icon>
             </div>
-          </div>
-          <div class="preview-actions">
-            <ha-button raised @click=${this._handleEditClick} aria-label="Edit Card">
-              Edit Card
-            </ha-button>
+            <div class="preview-text">
+              <div class="preview-title">Actions Card</div>
+              <div class="preview-description">Configure the card to wrap below.</div>
+            </div>
+            <div class="preview-actions">
+              <ha-button raised @click=${this._handleEditClick} aria-label="Edit Card">
+                Edit Card
+              </ha-button>
+            </div>
           </div>
         </div>
       `;
     }
 
-    // Set default wrapper height
     this.style.height = '100%';
 
-    // Otherwise, render the wrapper and the child card
     const hasActions =
       this.config.tap_action?.action !== 'none' ||
       this.config.hold_action?.action !== 'none' ||
-      this.config.double_tap_action?.action !== 'none';
+      this.config.double_tap_action?.action !== 'none' ||
+      this.config.swipe_left_action?.action !== 'none' ||
+      this.config.swipe_right_action?.action !== 'none' ||
+      this.config.swipe_up_action?.action !== 'none' ||
+      this.config.swipe_down_action?.action !== 'none';
 
     const wrapperStyle = `cursor: ${hasActions ? 'pointer' : 'default'}; display: block; height: 100%;`;
 
@@ -910,7 +1149,7 @@ export class ActionsCard extends LitElement {
         @pointerdown="${this._onPointerDown}"
         @pointerup="${this._onPointerUp}"
         @pointercancel="${this._resetState}"
-        @click="${this._onClick}"
+        @click="${this._boundPreventClick}"
         @contextmenu="${(e) => {
           if (this.config.hold_action) e.preventDefault();
         }}"
