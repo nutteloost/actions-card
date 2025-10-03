@@ -75,13 +75,21 @@ export class ActionsCard extends LitElement {
     this._swipeInProgress = false;
     this._isWindowTracked = false;
     this._processingPointerUp = false;
-    this._isClickBlocked = false; // NEW: Block clicks after swipe
-    this._clickBlockTimer = null; // NEW: Timer for click blocking
+    this._isClickBlocked = false; // Block clicks after swipe
+    this._clickBlockTimer = null; // Timer for click blocking
 
     // Bound handlers for window-level listeners
     this._boundOnPointerMove = this._onPointerMove.bind(this);
     this._boundOnPointerUp = this._onPointerUp.bind(this);
-    this._boundPreventClick = this._preventClick.bind(this); // NEW: Bound click preventer
+    this._boundPreventClick = this._preventClick.bind(this); // Bound click preventer
+
+    // Progress indicator state
+    this._holdProgressElement = null;
+    this._holdCompleted = false;
+    this._holdStartX = 0;
+    this._holdStartY = 0;
+    this._cancelDistance = 50; // pixels to move before canceling
+    this._holdWithProgressCanceled = false; // Track if hold-with-progress was canceled
   }
 
   /**
@@ -661,6 +669,9 @@ export class ActionsCard extends LitElement {
     super.disconnectedCallback();
     this._cleanupDefaultDialogPrevention();
 
+    // Clean up progress indicator
+    this._hideHoldProgress();
+
     // Clean up window listeners
     window.removeEventListener('pointermove', this._boundOnPointerMove);
     window.removeEventListener('pointerup', this._boundOnPointerUp);
@@ -711,8 +722,114 @@ export class ActionsCard extends LitElement {
     this._swipeStartTime = 0;
     this._pointerType = null;
     this._processingPointerUp = false;
+    // Clean up hold progress
+    this._hideHoldProgress();
+    this._holdCompleted = false;
+    this._holdStartX = 0;
+    this._holdStartY = 0;
+    this._holdWithProgressCanceled = false;
 
     // Note: Don't clear _isClickBlocked here - let the timer handle it
+  }
+
+  /**
+   * Create and show the hold progress indicator with circular ring
+   * @param {number} x - X coordinate
+   * @param {number} y - Y coordinate
+   * @param {number} duration - Hold duration in ms
+   * @private
+   */
+  _showHoldProgress(x, y, duration) {
+    // Remove any existing indicator
+    this._hideHoldProgress();
+
+    const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    const size = isTouchDevice
+      ? UI_CONSTANTS.PROGRESS_INDICATOR_SIZE_TOUCH
+      : UI_CONSTANTS.PROGRESS_INDICATOR_SIZE;
+    const strokeWidth = 4;
+    const radius = size / 2 - strokeWidth / 2;
+    const circumference = 2 * Math.PI * radius;
+
+    // Create container element
+    this._holdProgressElement = document.createElement('div');
+    this._holdProgressElement.style.cssText = `
+      position: fixed;
+      left: ${x}px;
+      top: ${y}px;
+      width: ${size}px;
+      height: ${size}px;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 9999;
+    `;
+
+    // Create SVG using innerHTML - no namespace needed!
+    this._holdProgressElement.innerHTML = `
+      <svg width="${size}" height="${size}" style="display: block;">
+        <!-- Background circle (track) -->
+        <circle
+          cx="${size / 2}"
+          cy="${size / 2}"
+          r="${radius}"
+          fill="none"
+          stroke="var(--primary-color, #03a9f4)"
+          stroke-width="${strokeWidth}"
+          opacity="0.2"
+        />
+        <!-- Progress circle -->
+        <circle
+          cx="${size / 2}"
+          cy="${size / 2}"
+          r="${radius}"
+          fill="none"
+          stroke="var(--primary-color, #03a9f4)"
+          stroke-width="${strokeWidth}"
+          stroke-linecap="round"
+          transform="rotate(-90 ${size / 2} ${size / 2})"
+          style="
+            stroke-dasharray: ${circumference};
+            stroke-dashoffset: ${circumference};
+            transition: stroke-dashoffset ${duration}ms linear;
+          "
+        />
+      </svg>
+    `;
+
+    document.body.appendChild(this._holdProgressElement);
+
+    // Trigger animation on next frame to ensure CSS transition works
+    const progressCircle = this._holdProgressElement.querySelector('circle:last-child');
+    requestAnimationFrame(() => {
+      progressCircle.style.strokeDashoffset = '0';
+    });
+
+    logDebug('ACTION', 'Hold progress indicator shown with circular ring');
+  }
+
+  /**
+   * Hide and remove the hold progress indicator
+   * @private
+   */
+  _hideHoldProgress() {
+    if (this._holdProgressElement) {
+      this._holdProgressElement.remove();
+      this._holdProgressElement = null;
+    }
+  }
+
+  /**
+   * Check if pointer has moved beyond cancel distance
+   * @param {number} currentX - Current X coordinate
+   * @param {number} currentY - Current Y coordinate
+   * @returns {boolean} True if moved too far
+   * @private
+   */
+  _hasMovedTooFar(currentX, currentY) {
+    const deltaX = currentX - this._holdStartX;
+    const deltaY = currentY - this._holdStartY;
+    const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+    return distance > this._cancelDistance;
   }
 
   /**
@@ -758,31 +875,53 @@ export class ActionsCard extends LitElement {
     this._swipeInProgress = false;
     this._pointerType = ev.pointerType;
 
+    // Track hold start position for progress indicator
+    this._holdStartX = ev.clientX;
+    this._holdStartY = ev.clientY;
+    this._holdCompleted = false;
+    this._holdWithProgressCanceled = false; // Reset cancel flag
+
     clearTimeout(this._holdTimeout);
     this._holdTriggered = false;
 
     // Attach window-level listeners for mouse to track movement outside element
     if (ev.pointerType === 'mouse') {
       logDebug('ACTION', 'Attaching pointermove/pointerup listeners to window');
-      this._isWindowTracked = true; // Set flag
+      this._isWindowTracked = true;
       window.addEventListener('pointermove', this._boundOnPointerMove);
       window.addEventListener('pointerup', this._boundOnPointerUp);
     } else {
-      this._isWindowTracked = false; // Touch events use element-level only
+      this._isWindowTracked = false;
     }
 
     if (this.config.hold_action && this.config.hold_action.action !== 'none') {
       logDebug('ACTION', 'Starting hold timer');
+      const holdTime = this.config.hold_action.hold_time || 500;
+      const showProgress = this.config.hold_action.show_progress || false;
+
+      // Show progress indicator if enabled
+      if (showProgress) {
+        this._showHoldProgress(ev.clientX, ev.clientY, holdTime);
+      }
+
       this._holdTimeout = window.setTimeout(() => {
         if (Math.abs(ev.clientX - this._startX) < 10 && Math.abs(ev.clientY - this._startY) < 10) {
-          this._holdTriggered = true;
-          this._handleAction('hold');
-          this._clickCount = 0;
+          if (showProgress) {
+            // Fire on release mode: mark as completed but don't fire yet
+            this._holdCompleted = true;
+            logDebug('ACTION', 'Hold completed, waiting for release');
+          } else {
+            // Immediate fire mode: existing behavior
+            this._holdTriggered = true;
+            this._handleAction('hold');
+            this._clickCount = 0;
+          }
         } else {
           logDebug('ACTION', 'Hold canceled (moved too much)');
+          this._hideHoldProgress();
           this._resetState();
         }
-      }, this.config.hold_action.hold_time || 500);
+      }, holdTime);
     }
   }
 
@@ -830,7 +969,31 @@ export class ActionsCard extends LitElement {
     const deltaY = ev.clientY - this._startY;
     const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
 
+    // Hide progress indicator
+    this._hideHoldProgress();
+
     clearTimeout(this._holdTimeout);
+
+    // If hold-with-progress was in progress (completed or canceled), don't process as tap
+    if (
+      this.config.hold_action?.show_progress &&
+      (this._holdCompleted || this._holdWithProgressCanceled)
+    ) {
+      if (this._holdCompleted && !this._hasMovedTooFar(ev.clientX, ev.clientY)) {
+        logDebug('ACTION', 'Hold action fired on release');
+        this._handleAction('hold');
+      } else if (this._holdWithProgressCanceled || this._hasMovedTooFar(ev.clientX, ev.clientY)) {
+        logDebug('ACTION', 'Hold action canceled - released outside bounds');
+        // CRITICAL: Suppress child card events when hold is canceled
+        this._suppressChildCardEvents(300);
+      }
+      this._resetState();
+      // IMPORTANT: Clear processing lock after reset
+      setTimeout(() => {
+        this._processingPointerUp = false;
+      }, 10);
+      return;
+    }
 
     if (this._holdTriggered) {
       logDebug('ACTION', 'Tap/swipe canceled (hold already triggered)');
@@ -936,7 +1099,22 @@ export class ActionsCard extends LitElement {
     if (distance > 10 && this._holdTimeout) {
       clearTimeout(this._holdTimeout);
       this._holdTimeout = null;
+      this._hideHoldProgress();
+      // Suppress child card events when hold is canceled
+      this._suppressChildCardEvents(300);
       logDebug('ACTION', 'Hold canceled during move');
+    }
+
+    // Check if moved outside cancel bounds during hold progress
+    if (this._holdProgressElement && this._hasMovedTooFar(ev.clientX, ev.clientY)) {
+      clearTimeout(this._holdTimeout);
+      this._holdTimeout = null;
+      this._holdCompleted = false;
+      this._holdWithProgressCanceled = true;
+      this._hideHoldProgress();
+      // Suppress child card events when hold is canceled
+      this._suppressChildCardEvents(300);
+      logDebug('ACTION', 'Hold canceled - moved outside bounds');
     }
   }
 

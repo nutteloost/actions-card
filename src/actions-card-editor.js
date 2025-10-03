@@ -410,6 +410,7 @@ export class ActionsCardEditor extends LitElement {
 
     return cleaned;
   }
+
   /**
    * Clean up action configuration by removing properties not relevant to the action type
    * Ensures configuration objects only contain valid properties for their action type,
@@ -436,9 +437,9 @@ export class ActionsCardEditor extends LitElement {
     // Properties that are valid for all action types
     const commonProperties = ['action', 'confirmation'];
 
-    // Add hold_time for hold actions
+    // Add hold_time and show_progress for hold actions
     if (actionOption === 'hold_action') {
-      commonProperties.push('hold_time');
+      commonProperties.push('hold_time', 'show_progress');
     }
 
     const allowedProperties = [...commonProperties, ...(validProperties[actionType] || [])];
@@ -462,7 +463,7 @@ export class ActionsCardEditor extends LitElement {
   _valueChanged(ev) {
     // Mark this event as processed
     ev._processedByActionsCardEditor = true;
-    ev.stopPropagation(); // Prevent event bubbling
+    ev.stopPropagation();
 
     if (!this._config || !ev.target) return;
     const target = ev.target;
@@ -480,7 +481,8 @@ export class ActionsCardEditor extends LitElement {
 
       if (key) {
         // Handle specific property updates
-        if (target.type === 'checkbox') {
+        // Check for ha-switch or checkbox
+        if (target.type === 'checkbox' || target.tagName === 'HA-SWITCH') {
           actionConfig[key] = target.checked;
         } else {
           // For entity pickers and other components, prioritize ev.detail.value
@@ -501,7 +503,8 @@ export class ActionsCardEditor extends LitElement {
     } else if (option) {
       // Handle regular options
       let value;
-      if (target.type === 'checkbox') {
+      // UPDATED: Check for ha-switch or checkbox
+      if (target.type === 'checkbox' || target.tagName === 'HA-SWITCH') {
         value = target.checked;
       } else {
         value = target.value;
@@ -1277,6 +1280,22 @@ export class ActionsCardEditor extends LitElement {
         <div class="help-text">
           Time in milliseconds to hold before triggering the action (default: 500ms)
         </div>
+      </div>
+
+      <!-- Show Progress Option -->
+      <div class="option-row">
+        <div class="option-label">
+          Show Progress Indicator
+          <div class="option-description">
+            Display visual feedback during hold and fire action on release
+          </div>
+        </div>
+        <ha-switch
+          .checked=${holdAction.show_progress || false}
+          data-option="hold_action"
+          data-attribute="show_progress"
+          @change=${this._valueChanged}
+        ></ha-switch>
       </div>
     `;
   }

@@ -121,6 +121,13 @@ export class ActionExecutor {
 
     try {
       logDebug('ACTION', 'Executing action:', actionConfig.action);
+
+      // CRITICAL: Suppress child card events BEFORE executing any action
+      // This prevents the child card from interfering with our custom actions
+      if (this.element._suppressChildCardEvents) {
+        this.element._suppressChildCardEvents(300);
+      }
+
       switch (actionConfig.action) {
         case ACTION_TYPES.NAVIGATE:
           executeNavigateAction(actionConfig, hass, this.config, this.childCard);
