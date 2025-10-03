@@ -225,11 +225,16 @@ hold_action:
   action: toggle
   entity: light.living_room
   hold_time: 700  # Time in milliseconds
+  show_progress: true  # Show visual progress indicator
 ```
 
-*Hold Time Options:*
+*Hold Action Options:*
 - `hold_time`: Duration in milliseconds to hold before triggering (range: 100-2000ms, default: 500ms)
-
+- `show_progress`: Show a circular progress ring during hold (default: false)
+  - Displays a visual indicator showing how long to hold
+  - Ring fills clockwise as time progresses
+  - Fires action on release when ring completes
+  - Automatically adjusts size for touch vs mouse input
 
 ---
 
