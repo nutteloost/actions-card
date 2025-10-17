@@ -219,7 +219,6 @@ confirmation:
 
 #### Hold Time
 Customize the hold time for hold actions (default is 500ms):
-
 ```yaml
 hold_action:
   action: toggle
@@ -229,14 +228,48 @@ hold_action:
 ```
 
 *Hold Action Options:*
-- `hold_time`: Duration in milliseconds to hold before triggering (range: 100-2000ms, default: 500ms)
-- `show_progress`: Show a circular progress ring during hold (default: false)
+  - `hold_time`: Duration in milliseconds to hold before triggering (range: 100-2000ms, default: 500ms)
+  - `show_progress`: Show a circular progress ring during hold (default: false)
   - Displays a visual indicator showing how long to hold
   - Ring fills clockwise as time progresses
   - Fires action on release when ring completes
   - Automatically adjusts size for touch vs mouse input
 
+#### Customizing Hold Progress Appearance
+
+You can customize the hold progress indicator using CSS variables with card-mod or themes.
+
+*Available CSS Variables:*
+- `--actions-card-hold-progress-color`: Color of the progress ring (default: theme's primary color)
+- `--actions-card-hold-progress-inactive-color`: Color of the inactive/background ring (default: same as progress color)
+- `--actions-card-hold-progress-inactive-opacity`: Opacity of the inactive ring (default: 0.2)
+- `--actions-card-hold-progress-opacity`: Opacity of the progress ring (default: 1)
+- `--actions-card-hold-progress-width`: Width of the progress ring stroke in pixels (default: 4)
+
+
 ---
+<details>
+<summary><strong>Example configuration</strong></summary>
+
+```yaml
+type: custom:actions-card
+card:
+  type: button
+  entity: light.living_room
+  name: Living Room
+hold_action:
+  action: toggle
+  show_progress: true
+  hold_time: 500
+card_mod:
+  style: |
+    :host {
+      --actions-card-hold-progress-color: #ff6b6b;
+      --actions-card-hold-progress-opacity: 80;
+    }
+```
+</details>
+
 
 ## Swipe Gestures
 

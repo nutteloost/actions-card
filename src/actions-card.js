@@ -69,6 +69,7 @@ export class ActionsCard extends LitElement {
     this._cardHelpers = null;
     this._actionExecutor = null;
     this._currentCardConfig = null;
+    this._cardModConfig = null;
 
     // Add swipe tracking
     this._swipeStartTime = 0;
@@ -150,6 +151,14 @@ export class ActionsCard extends LitElement {
     logDebug('CONFIG', 'setConfig received:', JSON.stringify(config));
 
     this.config = config;
+
+    // ADD THIS: Store card-mod configuration
+    if (config.card_mod) {
+      logDebug('CARD_MOD', 'Card-mod configuration detected', config.card_mod);
+      this._cardModConfig = JSON.parse(JSON.stringify(config.card_mod));
+    } else {
+      this._cardModConfig = null;
+    }
 
     this._actionExecutor = new ActionExecutor(this, null, this.config, this._childCard);
 
@@ -628,6 +637,11 @@ export class ActionsCard extends LitElement {
   updated(changedProperties) {
     super.updated(changedProperties);
 
+    // Apply card-mod styles when config changes
+    if (changedProperties.has('config') && this._cardModConfig) {
+      this._applyCardModStyles();
+    }
+
     // Only call _preventDefaultDialogs if the child card has actually changed
     if (
       changedProperties.has('_childCard') &&
@@ -659,6 +673,11 @@ export class ActionsCard extends LitElement {
     // Ensure card helpers are loaded when connected
     if (!this._cardHelpers) {
       this._loadCardHelpers();
+    }
+
+    // Apply card-mod styles when connected to DOM
+    if (this._cardModConfig) {
+      this._applyCardModStyles();
     }
   }
 
@@ -736,7 +755,8 @@ export class ActionsCard extends LitElement {
    * Create and show the hold progress indicator with circular ring
    * @param {number} x - X coordinate
    * @param {number} y - Y coordinate
-   * @param {number} duration - Hold duration in ms
+   * @param {
+   * number} duration - Hold duration in ms
    * @private
    */
   _showHoldProgress(x, y, duration) {
@@ -747,8 +767,33 @@ export class ActionsCard extends LitElement {
     const size = isTouchDevice
       ? UI_CONSTANTS.PROGRESS_INDICATOR_SIZE_TOUCH
       : UI_CONSTANTS.PROGRESS_INDICATOR_SIZE;
-    const strokeWidth = 4;
-    const radius = size / 2 - strokeWidth / 2;
+
+    // Read CSS variables from the card element
+    const computedStyle = getComputedStyle(this);
+
+    // Progress color
+    const progressColor =
+      computedStyle.getPropertyValue('--actions-card-hold-progress-color').trim() ||
+      computedStyle.getPropertyValue('--primary-color').trim() ||
+      '#03a9f4';
+
+    // Inactive color (defaults to progress color if not set)
+    const inactiveColor =
+      computedStyle.getPropertyValue('--actions-card-hold-progress-inactive-color').trim() ||
+      progressColor;
+
+    // Opacities
+    const inactiveOpacity =
+      computedStyle.getPropertyValue('--actions-card-hold-progress-inactive-opacity').trim() ||
+      '0.2';
+    const progressOpacity =
+      computedStyle.getPropertyValue('--actions-card-hold-progress-opacity').trim() || '1';
+
+    // Width
+    const progressWidth =
+      parseInt(computedStyle.getPropertyValue('--actions-card-hold-progress-width').trim()) || 4;
+
+    const radius = size / 2 - progressWidth / 2;
     const circumference = 2 * Math.PI * radius;
 
     // Create container element
@@ -761,21 +806,21 @@ export class ActionsCard extends LitElement {
       height: ${size}px;
       transform: translate(-50%, -50%);
       pointer-events: none;
-      z-index: 9999;
+      z-index: 99999;
     `;
 
-    // Create SVG using innerHTML - no namespace needed!
+    // Create SVG using innerHTML with computed values
     this._holdProgressElement.innerHTML = `
       <svg width="${size}" height="${size}" style="display: block;">
-        <!-- Background circle (track) -->
+        <!-- Inactive circle -->
         <circle
           cx="${size / 2}"
           cy="${size / 2}"
           r="${radius}"
           fill="none"
-          stroke="var(--primary-color, #03a9f4)"
-          stroke-width="${strokeWidth}"
-          opacity="0.2"
+          stroke="${inactiveColor}"
+          stroke-width="${progressWidth}"
+          opacity="${inactiveOpacity}"
         />
         <!-- Progress circle -->
         <circle
@@ -783,9 +828,10 @@ export class ActionsCard extends LitElement {
           cy="${size / 2}"
           r="${radius}"
           fill="none"
-          stroke="var(--primary-color, #03a9f4)"
-          stroke-width="${strokeWidth}"
+          stroke="${progressColor}"
+          stroke-width="${progressWidth}"
           stroke-linecap="round"
+          opacity="${progressOpacity}"
           transform="rotate(-90 ${size / 2} ${size / 2})"
           style="
             stroke-dasharray: ${circumference};
@@ -804,7 +850,49 @@ export class ActionsCard extends LitElement {
       progressCircle.style.strokeDashoffset = '0';
     });
 
-    logDebug('ACTION', 'Hold progress indicator shown with circular ring');
+    logDebug(
+      'ACTION',
+      'Hold progress indicator shown - color:',
+      progressColor,
+      'inactive:',
+      inactiveColor,
+      'width:',
+      progressWidth,
+      'inactive opacity:',
+      inactiveOpacity,
+      'progress opacity:',
+      progressOpacity
+    );
+  }
+
+  /**
+   * Apply card-mod styles to the component
+   * @private
+   */
+  _applyCardModStyles() {
+    if (!this._cardModConfig || !this._cardModConfig.style) {
+      return;
+    }
+
+    logDebug('CARD_MOD', 'Applying card-mod styles to actions-card');
+
+    const shadowRoot = this.shadowRoot;
+    if (!shadowRoot) {
+      logDebug('ERROR', 'No shadow root available for card-mod');
+      return;
+    }
+
+    // Create or update card-mod style element
+    let styleElement = shadowRoot.querySelector('#actions-card-mod-styles');
+
+    if (!styleElement) {
+      styleElement = document.createElement('style');
+      styleElement.id = 'actions-card-mod-styles';
+      shadowRoot.appendChild(styleElement);
+    }
+
+    styleElement.textContent = this._cardModConfig.style;
+    logDebug('CARD_MOD', 'Card-mod styles applied successfully');
   }
 
   /**
@@ -984,11 +1072,11 @@ export class ActionsCard extends LitElement {
         this._handleAction('hold');
       } else if (this._holdWithProgressCanceled || this._hasMovedTooFar(ev.clientX, ev.clientY)) {
         logDebug('ACTION', 'Hold action canceled - released outside bounds');
-        // CRITICAL: Suppress child card events when hold is canceled
+        // Suppress child card events when hold is canceled
         this._suppressChildCardEvents(300);
       }
       this._resetState();
-      // IMPORTANT: Clear processing lock after reset
+      // Clear processing lock after reset
       setTimeout(() => {
         this._processingPointerUp = false;
       }, 10);
@@ -1017,13 +1105,13 @@ export class ActionsCard extends LitElement {
         logDebug('ACTION', `Swipe detected: ${swipeDirection}`);
         this._swipeInProgress = true;
 
-        // CRITICAL: Stop event propagation immediately to prevent child card from responding
+        // Stop event propagation immediately to prevent child card from responding
         ev.stopImmediatePropagation();
 
-        // CRITICAL: Block clicks BEFORE handling the action
+        // Block clicks BEFORE handling the action
         this._blockClicksTemporarily(300);
 
-        // CRITICAL: Always suppress child card events during swipe, regardless of prevent_default_dialog setting
+        // Always suppress child card events during swipe, regardless of prevent_default_dialog setting
         // This prevents the child card from opening its own dialogs
         this._suppressChildCardEvents(300);
 
@@ -1068,21 +1156,27 @@ export class ActionsCard extends LitElement {
             }
           }
           this._resetState();
-        }, 250);
+        }, 250); // Standard 250ms timeout for double-tap
       } else if (this._clickCount === 2) {
         logDebug('ACTION', 'Double tap detected');
-        clearTimeout(this._clickTimeout);
+        clearTimeout(this._clickTimeout); // This is the crucial line that was missing/incorrect.
         this._clickTimeout = null;
         this._handleAction('double_tap');
         this._resetState();
       }
     } else {
+      // If double-tap is not configured, any click is a single tap
       logDebug('ACTION', 'Single tap (double tap not configured)');
       if (this.config.tap_action?.action !== 'none') {
         this._handleAction('tap');
       }
       this._resetState();
     }
+
+    // Clear the processing lock after a very short delay
+    setTimeout(() => {
+      this._processingPointerUp = false;
+    }, 10);
   }
 
   /**

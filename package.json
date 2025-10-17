@@ -1,6 +1,6 @@
 {
   "name": "actions-card",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "description": "A Home Assistant custom card that wraps another card to add tap, hold, and double-tap actions",
   "main": "build/actions-card.js",
   "type": "module",
@@ -26,6 +26,7 @@
     "validate": "npm run version-check && npm run size-check",
     "pre-release": "npm run format && npm run lint && npm run deploy:prod && npm run validate",
     "release": "npm run clean && npm run pre-release && npm run deploy:minified && echo '🎉 Release ready! File: build/actions-card.js'",
+    "release:auto": "node scripts/release.js",
     "clean": "rimraf build/*.js *.map",
     "test:build": "npm run deploy:prod && echo '✅ Production build test passed'"
   },

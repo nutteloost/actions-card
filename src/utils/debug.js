@@ -22,6 +22,7 @@ const logDebug = (category, ...args) => {
     ACTION: 'color: #9c27b0; font-weight: bold',
     ERROR: 'color: #f44336; font-weight: bold',
     INIT: 'color: #795548; font-weight: bold',
+    CARD_MOD: 'color: #9932cc; font-weight: bold',
     DEFAULT: 'color: #607d8b; font-weight: bold'
   };
 
