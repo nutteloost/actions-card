@@ -642,6 +642,23 @@ export class ActionsCard extends LitElement {
       this._applyCardModStyles();
     }
 
+    // Handle child card DOM insertion/removal
+    if (changedProperties.has('_childCard')) {
+      const wrapper = this.shadowRoot?.querySelector('.card-wrapper');
+      if (wrapper) {
+        // Remove old child card if it exists
+        const oldCard = wrapper.querySelector(':scope > *');
+        if (oldCard && oldCard !== this._childCard) {
+          wrapper.removeChild(oldCard);
+        }
+
+        // Add new child card if it exists and isn't already in the wrapper
+        if (this._childCard && !wrapper.contains(this._childCard)) {
+          wrapper.appendChild(this._childCard);
+        }
+      }
+    }
+
     // Only call _preventDefaultDialogs if the child card has actually changed
     if (
       changedProperties.has('_childCard') &&
@@ -1418,6 +1435,7 @@ export class ActionsCard extends LitElement {
 
     return html`
       <div
+        class="card-wrapper"
         @pointerdown="${this._onPointerDown}"
         @pointerup="${this._onPointerUp}"
         @pointercancel="${this._resetState}"
@@ -1429,9 +1447,7 @@ export class ActionsCard extends LitElement {
         aria-label="${hasActions ? 'Interactive card with actions' : ''}"
         role="${hasActions ? 'button' : ''}"
         ?prevent-default-dialog="${this.config.prevent_default_dialog}"
-      >
-        ${this._childCard}
-      </div>
+      ></div>
     `;
   }
 

@@ -88,8 +88,8 @@ export function executeServiceAction(actionConfig, hass, _config, _childCard) {
     logDebug('ACTION', 'Invalid service format:', actionConfig.service);
     return;
   }
-  // Use service_data or data for compatibility
-  const serviceData = actionConfig.service_data || actionConfig.data || {};
+  // Use service_data or data for compatibility - CREATE A COPY
+  const serviceData = { ...(actionConfig.service_data || actionConfig.data || {}) };
   // Target handling
   const target =
     actionConfig.target || (serviceData.entity_id ? { entity_id: serviceData.entity_id } : {});
