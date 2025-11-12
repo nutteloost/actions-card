@@ -29,9 +29,10 @@ export default {
       // Preserve essential function/class names for debugging
       mangle: {
         reserved: ['ActionsCard', 'ActionsCardEditor', 'createActionsCard', 'createActionsCardEditor'],
-        properties: {
-          regex: /^_/  // Mangle private properties starting with underscore
-        }
+        // Remove or comment out the properties section entirely
+        // properties: {
+        //   regex: /^_/
+        // }
       },
       
       // Compression settings

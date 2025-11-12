@@ -1,6 +1,6 @@
 {
   "name": "actions-card",
-  "version": "1.5.3",
+  "version": "1.5.4",
   "description": "A Home Assistant custom card that wraps another card to add tap, hold, and double-tap actions",
   "main": "build/actions-card.js",
   "type": "module",
