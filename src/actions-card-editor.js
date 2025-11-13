@@ -953,27 +953,25 @@ export class ActionsCardEditor extends LitElement {
               placeholder="domain.service"
             ></ha-textfield>
           </div>
-          <div class="config-row">
+          <div class="config-row yaml-editor-container" data-action-type="${actionType}">
             <ha-yaml-editor
+              .hass=${this.hass}
               label="Service Data"
-              .value=${actionConfig.service_data
-                ? JSON.stringify(actionConfig.service_data, null, 2)
-                : '{}'}
-              data-option="${actionType}"
-              data-attribute="service_data"
+              .defaultValue=${actionConfig.service_data || {}}
               @value-changed=${(e) => {
                 e._processedByActionsCardEditor = true;
-                try {
-                  const newConfig = { ...this._config };
-                  newConfig[actionType] = {
-                    ...newConfig[actionType],
-                    service_data: JSON.parse(e.detail.value)
-                  };
-                  this._config = newConfig;
-                  this._fireConfigChangedWithFlags();
-                } catch (err) {
-                  console.error('Invalid service data:', err);
-                }
+                e.stopPropagation();
+
+                if (!e.detail || e.detail.value === undefined) return;
+                if (!e.detail.isValid) return;
+
+                const newConfig = { ...this._config };
+                newConfig[actionType] = {
+                  ...newConfig[actionType],
+                  service_data: e.detail.value
+                };
+                this._config = newConfig;
+                this._fireConfigChangedWithFlags();
               }}
             ></ha-yaml-editor>
           </div>
@@ -1017,27 +1015,25 @@ export class ActionsCardEditor extends LitElement {
               @change=${this._valueChanged}
             ></ha-textfield>
           </div>
-          <div class="config-row">
+          <div class="config-row yaml-editor-container" data-action-type="${actionType}">
             <ha-yaml-editor
+              .hass=${this.hass}
               label="Event Data (optional)"
-              .value=${actionConfig.event_data
-                ? JSON.stringify(actionConfig.event_data, null, 2)
-                : '{}'}
-              data-option="${actionType}"
-              data-attribute="event_data"
+              .defaultValue=${actionConfig.event_data || {}}
               @value-changed=${(e) => {
                 e._processedByActionsCardEditor = true;
-                try {
-                  const newConfig = { ...this._config };
-                  newConfig[actionType] = {
-                    ...newConfig[actionType],
-                    event_data: JSON.parse(e.detail.value)
-                  };
-                  this._config = newConfig;
-                  this._fireConfigChangedWithFlags();
-                } catch (err) {
-                  console.error('Invalid event data:', err);
-                }
+                e.stopPropagation();
+
+                if (!e.detail || e.detail.value === undefined) return;
+                if (!e.detail.isValid) return;
+
+                const newConfig = { ...this._config };
+                newConfig[actionType] = {
+                  ...newConfig[actionType],
+                  event_data: e.detail.value
+                };
+                this._config = newConfig;
+                this._fireConfigChangedWithFlags();
               }}
             ></ha-yaml-editor>
           </div>
@@ -1556,6 +1552,14 @@ export class ActionsCardEditor extends LitElement {
         this._debouncedEnsureCardPickerLoaded();
       }
     }
+  }
+
+  /**
+   * Force update all yaml editors by recreating them with current config values
+   * @private
+   */
+  _updateYamlEditors() {
+    // Method removed - using defaultValue in template instead
   }
 
   /**
