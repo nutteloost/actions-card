@@ -1,12 +1,13 @@
 /**
  * Action Execution Logic
  * Handles the orchestration of action execution including confirmation dialogs,
- * action validation, and integration with Home Assistant services.
+ * action validation, template processing, and integration with Home Assistant services.
  * Provides the main entry point for all action processing.
  */
 
 import { ACTION_TYPES } from './action-types.js';
 import { logDebug } from '../utils/debug.js';
+import { objectContainsTemplates, processTemplates } from '../utils/templates.js';
 import {
   executeNavigateAction,
   executeUrlAction,
@@ -19,7 +20,7 @@ import {
 
 /**
  * Action Executor Class
- * Manages the execution of different action types with confirmation support
+ * Manages the execution of different action types with confirmation and template support
  */
 export class ActionExecutor {
   constructor(element, hass, config, childCard) {
@@ -31,7 +32,7 @@ export class ActionExecutor {
 
   /**
    * Handles different action types (tap, hold, double-tap, swipe)
-   * @param {string} actionType - Type of action to handle ('tap', 'hold', 'double_tap', 'swipe_left', 'swipe_right', 'swipe_up', 'swipe_down')
+   * @param {string} actionType - Type of action to handle
    */
   handleAction(actionType = 'tap') {
     const actionConfig = this.config[`${actionType}_action`];
@@ -51,20 +52,34 @@ export class ActionExecutor {
    * @param {Object} actionConfig - Configuration for the action
    * @private
    */
-  _showConfirmationDialog(actionConfig) {
+  async _showConfirmationDialog(actionConfig) {
+    const hass = this.element.hass;
+
+    // Process templates in confirmation text if present
     let confirmationText = 'Are you sure?';
     let confirmationTitle = undefined;
     let confirmText = 'Confirm';
     let dismissText = 'Cancel';
 
-    // Handle both string and object confirmation formats
     if (typeof actionConfig.confirmation === 'object') {
       confirmationText = actionConfig.confirmation.text || confirmationText;
       confirmationTitle = actionConfig.confirmation.title;
       confirmText = actionConfig.confirmation.confirm_text || confirmText;
       dismissText = actionConfig.confirmation.dismiss_text || dismissText;
+
+      // Process templates in confirmation strings
+      if (objectContainsTemplates(actionConfig.confirmation)) {
+        const processed = await processTemplates(hass, actionConfig.confirmation);
+        confirmationText = processed.text || confirmationText;
+        confirmationTitle = processed.title || confirmationTitle;
+        confirmText = processed.confirm_text || confirmText;
+        dismissText = processed.dismiss_text || dismissText;
+      }
     } else if (typeof actionConfig.confirmation === 'string') {
       confirmationText = actionConfig.confirmation;
+      if (objectContainsTemplates(confirmationText)) {
+        confirmationText = await processTemplates(hass, confirmationText);
+      }
     }
 
     // Create dialog element
@@ -114,44 +129,51 @@ export class ActionExecutor {
    * @param {Object} actionConfig - Configuration for the action to execute
    * @private
    */
-  _executeAction(actionConfig) {
+  async _executeAction(actionConfig) {
     this._lastActionTime = Date.now();
     const hass = this.element.hass;
     if (!hass || !actionConfig.action) return;
 
     try {
-      logDebug('ACTION', 'Executing action:', actionConfig.action);
-
       // CRITICAL: Suppress child card events BEFORE executing any action
-      // This prevents the child card from interfering with our custom actions
       if (this.element._suppressChildCardEvents) {
         this.element._suppressChildCardEvents(300);
       }
 
-      switch (actionConfig.action) {
+      // Process templates if the config contains any
+      let processedConfig = actionConfig;
+      if (objectContainsTemplates(actionConfig)) {
+        logDebug('ACTION', 'Processing templates in action config');
+        processedConfig = await processTemplates(hass, actionConfig);
+        logDebug('ACTION', 'Processed config:', processedConfig);
+      }
+
+      logDebug('ACTION', 'Executing action:', processedConfig.action);
+
+      switch (processedConfig.action) {
         case ACTION_TYPES.NAVIGATE:
-          executeNavigateAction(actionConfig, hass, this.config, this.childCard);
+          executeNavigateAction(processedConfig, hass, this.config, this.childCard);
           break;
         case ACTION_TYPES.URL:
-          executeUrlAction(actionConfig, hass, this.config, this.childCard);
+          executeUrlAction(processedConfig, hass, this.config, this.childCard);
           break;
         case ACTION_TYPES.TOGGLE:
-          executeToggleAction(actionConfig, hass, this.config, this.childCard);
+          executeToggleAction(processedConfig, hass, this.config, this.childCard);
           break;
         case ACTION_TYPES.CALL_SERVICE:
-          executeServiceAction(actionConfig, hass, this.config, this.childCard);
+          executeServiceAction(processedConfig, hass, this.config, this.childCard);
           break;
         case ACTION_TYPES.MORE_INFO:
-          executeMoreInfoAction(actionConfig, hass, this.config, this.childCard, this.element);
+          executeMoreInfoAction(processedConfig, hass, this.config, this.childCard, this.element);
           break;
         case ACTION_TYPES.ASSIST:
-          executeAssistAction(actionConfig, hass, this.config, this.childCard, this.element);
+          executeAssistAction(processedConfig, hass, this.config, this.childCard, this.element);
           break;
         case ACTION_TYPES.FIRE_DOM_EVENT:
-          executeDomEventAction(actionConfig, hass, this.config, this.childCard, this.element);
+          executeDomEventAction(processedConfig, hass, this.config, this.childCard, this.element);
           break;
         default:
-          logDebug('ACTION', 'Unrecognized action:', actionConfig.action);
+          logDebug('ACTION', 'Unrecognized action:', processedConfig.action);
       }
     } catch (e) {
       console.error('ActionsCard: Error executing action:', actionConfig.action, e);
