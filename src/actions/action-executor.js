@@ -3,6 +3,9 @@
  * Handles the orchestration of action execution including confirmation dialogs,
  * action validation, template processing, and integration with Home Assistant services.
  * Provides the main entry point for all action processing.
+ *
+ * Templates are pre-processed when hass updates to ensure synchronous execution
+ * at action time, which is required for iOS popup blocker compatibility.
  */
 
 import { ACTION_TYPES } from './action-types.js';
@@ -10,7 +13,6 @@ import { logDebug } from '../utils/debug.js';
 import { objectContainsTemplates, processTemplates } from '../utils/templates.js';
 import {
   executeNavigateAction,
-  executeUrlAction,
   executeToggleAction,
   executeServiceAction,
   executeMoreInfoAction,
@@ -28,34 +30,80 @@ export class ActionExecutor {
     this.config = config;
     this.childCard = childCard;
     this._lastActionTime = 0;
+
+    // Cache for pre-processed action configs (templates already resolved)
+    this._processedConfigs = {};
+  }
+
+  /**
+   * Pre-process all action configs that contain templates
+   * Called when hass updates to ensure URLs are ready when user taps
+   * @param {Object} hass - Home Assistant object
+   */
+  async preProcessTemplates(hass) {
+    if (!hass || !this.config) return;
+
+    const actionTypes = [
+      'tap_action',
+      'hold_action',
+      'double_tap_action',
+      'swipe_left_action',
+      'swipe_right_action',
+      'swipe_up_action',
+      'swipe_down_action'
+    ];
+
+    // Process each action config that has templates
+    for (const actionType of actionTypes) {
+      const actionConfig = this.config[actionType];
+      if (actionConfig && objectContainsTemplates(actionConfig)) {
+        try {
+          this._processedConfigs[actionType] = await processTemplates(hass, actionConfig);
+          logDebug(
+            'ACTION',
+            `Pre-processed templates for ${actionType}:`,
+            this._processedConfigs[actionType]
+          );
+        } catch (e) {
+          logDebug('ERROR', `Failed to pre-process ${actionType}:`, e);
+          // Keep original config as fallback
+          this._processedConfigs[actionType] = actionConfig;
+        }
+      } else {
+        // No templates, use original config
+        this._processedConfigs[actionType] = actionConfig;
+      }
+    }
   }
 
   /**
    * Handles different action types (tap, hold, double-tap, swipe)
+   * Uses pre-processed configs for synchronous execution (iOS compatibility)
    * @param {string} actionType - Type of action to handle
    */
   handleAction(actionType = 'tap') {
-    const actionConfig = this.config[`${actionType}_action`];
+    const actionKey = `${actionType}_action`;
+
+    // Use pre-processed config if available, otherwise fall back to original
+    const actionConfig = this._processedConfigs[actionKey] || this.config[actionKey];
     if (!actionConfig || actionConfig.action === 'none') return;
 
     logDebug('ACTION', `Handling ${actionType} action:`, actionConfig);
 
     if (actionConfig.confirmation) {
-      this._showConfirmationDialog(actionConfig);
+      this._showConfirmationDialog(actionConfig, actionKey);
     } else {
-      this._executeAction(actionConfig);
+      this._executeActionSync(actionConfig);
     }
   }
 
   /**
    * Shows confirmation dialog for an action
-   * @param {Object} actionConfig - Configuration for the action
+   * @param {Object} actionConfig - Configuration for the action (already processed)
+   * @param {string} actionKey - The action key for re-processing if needed
    * @private
    */
-  async _showConfirmationDialog(actionConfig) {
-    const hass = this.element.hass;
-
-    // Process templates in confirmation text if present
+  _showConfirmationDialog(actionConfig, actionKey) {
     let confirmationText = 'Are you sure?';
     let confirmationTitle = undefined;
     let confirmText = 'Confirm';
@@ -66,117 +114,114 @@ export class ActionExecutor {
       confirmationTitle = actionConfig.confirmation.title;
       confirmText = actionConfig.confirmation.confirm_text || confirmText;
       dismissText = actionConfig.confirmation.dismiss_text || dismissText;
-
-      // Process templates in confirmation strings
-      if (objectContainsTemplates(actionConfig.confirmation)) {
-        const processed = await processTemplates(hass, actionConfig.confirmation);
-        confirmationText = processed.text || confirmationText;
-        confirmationTitle = processed.title || confirmationTitle;
-        confirmText = processed.confirm_text || confirmText;
-        dismissText = processed.dismiss_text || dismissText;
-      }
     } else if (typeof actionConfig.confirmation === 'string') {
       confirmationText = actionConfig.confirmation;
-      if (objectContainsTemplates(confirmationText)) {
-        confirmationText = await processTemplates(hass, confirmationText);
-      }
     }
 
-    // Create dialog element
     const dialog = document.createElement('ha-dialog');
     dialog.heading = confirmationTitle || '';
     dialog.open = true;
 
-    // Create content container
     const content = document.createElement('div');
     content.innerText = confirmationText;
     dialog.appendChild(content);
 
-    // Create confirm button with direct click handler
     const primaryButton = document.createElement('mwc-button');
     primaryButton.slot = 'primaryAction';
     primaryButton.label = confirmText;
     primaryButton.style.color = 'var(--primary-color)';
     primaryButton.setAttribute('aria-label', confirmText);
 
-    // Add direct click event to the confirm button
     primaryButton.addEventListener('click', () => {
       dialog.parentNode.removeChild(dialog);
-      this._executeAction(actionConfig);
+      // Re-fetch processed config in case it was updated
+      const currentConfig = this._processedConfigs[actionKey] || actionConfig;
+      this._executeActionSync(currentConfig);
     });
 
-    // Create cancel button with direct click handler
     const secondaryButton = document.createElement('mwc-button');
     secondaryButton.slot = 'secondaryAction';
     secondaryButton.label = dismissText;
     secondaryButton.setAttribute('aria-label', dismissText);
 
-    // Add direct click event to the cancel button
     secondaryButton.addEventListener('click', () => {
       dialog.parentNode.removeChild(dialog);
     });
 
-    // Append buttons to dialog
     dialog.appendChild(primaryButton);
     dialog.appendChild(secondaryButton);
 
-    // Add dialog to document
     document.body.appendChild(dialog);
   }
 
   /**
-   * Executes the configured action
-   * @param {Object} actionConfig - Configuration for the action to execute
+   * Executes the configured action SYNCHRONOUSLY
+   * This is critical for iOS popup blocker compatibility - no async/await here!
+   * @param {Object} actionConfig - Pre-processed configuration for the action
    * @private
    */
-  async _executeAction(actionConfig) {
+  _executeActionSync(actionConfig) {
     this._lastActionTime = Date.now();
     const hass = this.element.hass;
     if (!hass || !actionConfig.action) return;
 
     try {
-      // CRITICAL: Suppress child card events BEFORE executing any action
       if (this.element._suppressChildCardEvents) {
         this.element._suppressChildCardEvents(300);
       }
 
-      // Process templates if the config contains any
-      let processedConfig = actionConfig;
-      if (objectContainsTemplates(actionConfig)) {
-        logDebug('ACTION', 'Processing templates in action config');
-        processedConfig = await processTemplates(hass, actionConfig);
-        logDebug('ACTION', 'Processed config:', processedConfig);
-      }
+      logDebug('ACTION', 'Executing action (sync):', actionConfig.action);
 
-      logDebug('ACTION', 'Executing action:', processedConfig.action);
-
-      switch (processedConfig.action) {
+      switch (actionConfig.action) {
         case ACTION_TYPES.NAVIGATE:
-          executeNavigateAction(processedConfig, hass, this.config, this.childCard);
+          executeNavigateAction(actionConfig, hass, this.config, this.childCard);
           break;
         case ACTION_TYPES.URL:
-          executeUrlAction(processedConfig, hass, this.config, this.childCard);
+          this._executeUrlAction(actionConfig);
           break;
         case ACTION_TYPES.TOGGLE:
-          executeToggleAction(processedConfig, hass, this.config, this.childCard);
+          executeToggleAction(actionConfig, hass, this.config, this.childCard);
           break;
         case ACTION_TYPES.CALL_SERVICE:
-          executeServiceAction(processedConfig, hass, this.config, this.childCard);
+          executeServiceAction(actionConfig, hass, this.config, this.childCard);
           break;
         case ACTION_TYPES.MORE_INFO:
-          executeMoreInfoAction(processedConfig, hass, this.config, this.childCard, this.element);
+          executeMoreInfoAction(actionConfig, hass, this.config, this.childCard, this.element);
           break;
         case ACTION_TYPES.ASSIST:
-          executeAssistAction(processedConfig, hass, this.config, this.childCard, this.element);
+          executeAssistAction(actionConfig, hass, this.config, this.childCard, this.element);
           break;
         case ACTION_TYPES.FIRE_DOM_EVENT:
-          executeDomEventAction(processedConfig, hass, this.config, this.childCard, this.element);
+          executeDomEventAction(actionConfig, hass, this.config, this.childCard, this.element);
           break;
         default:
-          logDebug('ACTION', 'Unrecognized action:', processedConfig.action);
+          logDebug('ACTION', 'Unrecognized action:', actionConfig.action);
       }
     } catch (e) {
       console.error('ActionsCard: Error executing action:', actionConfig.action, e);
+    }
+  }
+
+  /**
+   * Execute URL action
+   * @param {Object} actionConfig - Processed action configuration
+   * @private
+   */
+  _executeUrlAction(actionConfig) {
+    const url = actionConfig.url_path || '';
+    const target = actionConfig.target || '_blank';
+
+    if (!url) {
+      logDebug('ACTION', 'URL action called without url_path');
+      return;
+    }
+
+    logDebug('ACTION', 'Opening URL:', url, { target });
+
+    if (target === '_blank') {
+      window.open(url, '_blank');
+    } else {
+      window.location.href = url;
     }
   }
 

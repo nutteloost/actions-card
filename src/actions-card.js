@@ -111,6 +111,11 @@ export class ActionsCard extends LitElement {
       if (this._actionExecutor) {
         this._actionExecutor.config = this.config;
         this._actionExecutor.childCard = this._childCard;
+
+        // Re-process templates when config changes
+        if (this.hass) {
+          this._actionExecutor.preProcessTemplates(this.hass);
+        }
       }
     }
 
@@ -161,6 +166,11 @@ export class ActionsCard extends LitElement {
     }
 
     this._actionExecutor = new ActionExecutor(this, null, this.config, this._childCard);
+
+    // Pre-process templates if hass is already available
+    if (this.hass) {
+      this._actionExecutor.preProcessTemplates(this.hass);
+    }
 
     if (config && config.card) {
       if (
@@ -587,6 +597,12 @@ export class ActionsCard extends LitElement {
           this._createCardElement(this.config.card);
         }
       }
+    }
+
+    // Pre-process templates when hass changes
+    // This ensures URLs are resolved before user taps (required for iOS)
+    if (this._actionExecutor && hass) {
+      this._actionExecutor.preProcessTemplates(hass);
     }
 
     // Request update if hass object itself changed, even if references inside are the same
