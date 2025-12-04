@@ -78,19 +78,19 @@ export function evalJsTemplate(hass, template, entity = null) {
 
   try {
     /* eslint-disable no-new-func */
-    const result = new Function(
-      'states',
-      'entity',
-      'user',
-      'hass',
-      `'use strict'; ${code}`
-    )(hass.states, entity, hass.user, hass);
+    const result = new Function('states', 'entity', 'user', 'hass', `'use strict'; ${code}`)(
+      hass.states,
+      entity,
+      hass.user,
+      hass
+    );
     /* eslint-enable no-new-func */
 
     logDebug('ACTION', 'JS Template evaluated:', template.substring(0, 50) + '...', '->', result);
     return result;
   } catch (e) {
-    const templatePreview = template.length <= 100 ? template.trim() : `${template.trim().substring(0, 98)}...`;
+    const templatePreview =
+      template.length <= 100 ? template.trim() : `${template.trim().substring(0, 98)}...`;
     logDebug('ERROR', `JS Template error in '${templatePreview}':`, e.message);
     console.error('ActionsCard JS Template Error:', e);
     return template; // Return original on error
