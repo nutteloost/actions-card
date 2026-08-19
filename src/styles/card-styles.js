@@ -10,6 +10,10 @@ export function getCardStyles() {
       overflow: hidden;
       height: 100%;
     }
+    :host([hidden]) {
+      display: none !important;
+      height: 0 !important;
+    }
     .preview-container {
       display: flex;
       flex-direction: column;

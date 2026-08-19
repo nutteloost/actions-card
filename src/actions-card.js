@@ -91,6 +91,52 @@ export class ActionsCard extends LitElement {
     this._holdStartY = 0;
     this._cancelDistance = 50; // pixels to move before canceling
     this._holdWithProgressCanceled = false; // Track if hold-with-progress was canceled
+
+    // Reflect the wrapped card's own hidden state onto this card, so Home
+    // Assistant's masonry view (which margins every non-hidden direct child)
+    // stops giving this card space when the card it wraps collapses itself
+    // (e.g. a "hide when empty" option on the wrapped card). hui-card only
+    // ever looks at the hidden property of its own direct child, and this
+    // card is that direct child instead of whatever it wraps.
+    this._childHiddenObserver = null;
+    // Documented LovelaceCard property: keeps hui-card from removing this
+    // card from the DOM while hidden, so it keeps receiving hass updates
+    // and can notice the wrapped card becoming visible again later.
+    this.connectedWhileHidden = true;
+  }
+
+  /**
+   * Mirror the wrapped card's own hidden state onto this card's host
+   * element. Uses a MutationObserver rather than hooking into the hass
+   * update cycle, since a wrapped card can change its own hidden state
+   * outside of a hass push too (e.g. on its own timer).
+   */
+  _syncHiddenState() {
+    const shouldHide = !!(this._childCard && this._childCard.hidden);
+    if (this.hidden !== shouldHide) {
+      this.hidden = shouldHide;
+    }
+  }
+
+  /**
+   * (Re)attach the hidden-state observer to the current child card.
+   * @private
+   */
+  _observeChildHiddenState() {
+    if (this._childHiddenObserver) {
+      this._childHiddenObserver.disconnect();
+      this._childHiddenObserver = null;
+    }
+
+    if (this._childCard) {
+      this._childHiddenObserver = new MutationObserver(() => this._syncHiddenState());
+      this._childHiddenObserver.observe(this._childCard, {
+        attributes: true,
+        attributeFilter: ['hidden']
+      });
+    }
+
+    this._syncHiddenState();
   }
 
   /**
@@ -673,6 +719,8 @@ export class ActionsCard extends LitElement {
           wrapper.appendChild(this._childCard);
         }
       }
+
+      this._observeChildHiddenState();
     }
 
     // Only call _preventDefaultDialogs if the child card has actually changed
@@ -720,6 +768,11 @@ export class ActionsCard extends LitElement {
   disconnectedCallback() {
     super.disconnectedCallback();
     this._cleanupDefaultDialogPrevention();
+
+    if (this._childHiddenObserver) {
+      this._childHiddenObserver.disconnect();
+      this._childHiddenObserver = null;
+    }
 
     // Clean up progress indicator
     this._hideHoldProgress();
