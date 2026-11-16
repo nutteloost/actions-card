@@ -396,7 +396,10 @@ export class ActionsCard extends LitElement {
     } catch (e) {
       // Last resort fallback
       const errorCard = document.createElement('div');
-      errorCard.innerHTML = `<ha-alert alert-type="error">Error: ${errorMessage}</ha-alert>`;
+      const alert = document.createElement('ha-alert');
+      alert.setAttribute('alert-type', 'error');
+      alert.textContent = `Error: ${errorMessage}`;
+      errorCard.appendChild(alert);
       this._childCard = errorCard;
     }
 
