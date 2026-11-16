@@ -10,7 +10,7 @@ console.log(`Building in ${isProduction ? 'production' : 'development'} mode${sh
 export default {
   input: 'src/index.js',
   output: {
-    file: 'build/actions-card.js',
+    file: 'build/actions-card-fixed.js',
     format: 'es',
     sourcemap: process.env.SOURCEMAP === 'true', // Only create maps when explicitly requested
     inlineDynamicImports: true // Fix for dynamic imports
