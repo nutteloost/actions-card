@@ -118,40 +118,70 @@ export class ActionExecutor {
       confirmationText = actionConfig.confirmation;
     }
 
-    const dialog = document.createElement('ha-dialog');
-    dialog.heading = confirmationTitle || '';
-    dialog.open = true;
+    // Native <dialog>: does not depend on Home Assistant's internal components
+    const dialog = document.createElement('dialog');
+    dialog.setAttribute('aria-label', confirmationTitle || confirmationText);
+    Object.assign(dialog.style, {
+      border: 'none',
+      borderRadius: 'var(--ha-card-border-radius, 12px)',
+      padding: '24px',
+      maxWidth: 'min(420px, 90vw)',
+      background: 'var(--card-background-color, #fff)',
+      color: 'var(--primary-text-color, #000)',
+      boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+      fontFamily: 'var(--paper-font-body1_-_font-family, inherit)'
+    });
+
+    if (confirmationTitle) {
+      const heading = document.createElement('h2');
+      heading.textContent = confirmationTitle;
+      heading.style.cssText = 'margin:0 0 12px;font-size:20px;font-weight:500;';
+      dialog.appendChild(heading);
+    }
 
     const content = document.createElement('div');
-    content.innerText = confirmationText;
+    content.textContent = confirmationText;
+    content.style.cssText = 'margin-bottom:24px;white-space:pre-wrap;';
     dialog.appendChild(content);
 
-    const primaryButton = document.createElement('mwc-button');
-    primaryButton.slot = 'primaryAction';
-    primaryButton.label = confirmText;
-    primaryButton.style.color = 'var(--primary-color)';
-    primaryButton.setAttribute('aria-label', confirmText);
+    const makeButton = (label, primary) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = label;
+      btn.setAttribute('aria-label', label);
+      btn.style.cssText =
+        'cursor:pointer;border:none;background:transparent;padding:10px 16px;font:inherit;' +
+        'font-weight:500;text-transform:uppercase;border-radius:8px;' +
+        `color:${primary ? 'var(--primary-color)' : 'var(--secondary-text-color)'};`;
+      return btn;
+    };
 
-    primaryButton.addEventListener('click', () => {
-      dialog.parentNode.removeChild(dialog);
+    const actions = document.createElement('div');
+    actions.style.cssText = 'display:flex;justify-content:flex-end;gap:8px;';
+    const cancelButton = makeButton(dismissText, false);
+    const confirmButton = makeButton(confirmText, true);
+    actions.append(cancelButton, confirmButton);
+    dialog.appendChild(actions);
+
+    const close = () => {
+      dialog.close();
+      dialog.remove();
+    };
+    cancelButton.addEventListener('click', close);
+    dialog.addEventListener('cancel', (e) => {
+      e.preventDefault();
+      close();
+    });
+    confirmButton.addEventListener('click', () => {
+      close();
       // Re-fetch processed config in case it was updated
       const currentConfig = this._processedConfigs[actionKey] || actionConfig;
       this._executeActionSync(currentConfig);
     });
 
-    const secondaryButton = document.createElement('mwc-button');
-    secondaryButton.slot = 'secondaryAction';
-    secondaryButton.label = dismissText;
-    secondaryButton.setAttribute('aria-label', dismissText);
-
-    secondaryButton.addEventListener('click', () => {
-      dialog.parentNode.removeChild(dialog);
-    });
-
-    dialog.appendChild(primaryButton);
-    dialog.appendChild(secondaryButton);
-
     document.body.appendChild(dialog);
+    dialog.showModal();
+    confirmButton.focus();
   }
 
   /**
@@ -216,12 +246,27 @@ export class ActionExecutor {
       return;
     }
 
+    // Security: only allow web (http/https), relative and mailto/tel links.
+    // Blocks javascript:, data: and similar schemes.
+    let parsed;
+    try {
+      parsed = new URL(url, window.location.href);
+    } catch (e) {
+      logDebug('ERROR', 'URL action blocked (invalid URL):', url);
+      return;
+    }
+    if (!['http:', 'https:', 'mailto:', 'tel:'].includes(parsed.protocol)) {
+      console.warn('ActionsCard: URL action blocked (unsupported scheme):', parsed.protocol);
+      return;
+    }
+
     logDebug('ACTION', 'Opening URL:', url, { target });
 
     if (target === '_blank') {
-      window.open(url, '_blank');
+      // noopener/noreferrer stop the new page reaching back into this dashboard
+      window.open(parsed.href, '_blank', 'noopener,noreferrer');
     } else {
-      window.location.href = url;
+      window.location.href = parsed.href;
     }
   }
 
