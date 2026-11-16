@@ -3,4 +3,4 @@
  * Shared constants to avoid circular dependencies
  */
 
-export const CARD_VERSION = '1.7.0';
+export const CARD_VERSION = '1.7.2';

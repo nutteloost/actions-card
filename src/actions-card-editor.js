@@ -664,6 +664,26 @@ export class ActionsCardEditor extends LitElement {
   }
 
   /**
+   * Finds where Home Assistant keeps its dialogs, so the wrapped card's editor dialog
+   * sits inside Home Assistant's own element tree. Home Assistant components get their
+   * translation settings from that tree; a dialog attached to document.body is outside it,
+   * which leaves parts of the wrapped card's editor (e.g. Picture upload) blank.
+   * @returns {Node} The node to attach the dialog to
+   * @private
+   */
+  _getDialogContainer() {
+    let node = this.parentNode;
+    while (node) {
+      if (node.localName === 'hui-dialog-edit-card' && node.parentNode) {
+        return node.parentNode;
+      }
+      node = node.parentNode || (node.getRootNode && node.getRootNode().host);
+    }
+    const mainApp = document.querySelector('home-assistant');
+    return mainApp?.shadowRoot || document.body;
+  }
+
+  /**
    * Opens the edit dialog for the wrapped card
    * @private
    */
@@ -691,8 +711,8 @@ export class ActionsCardEditor extends LitElement {
       // Track this dialog for proper lifecycle management
       this._activeChildEditors.add(dialog);
 
-      // Add dialog to body before setting properties
-      document.body.appendChild(dialog);
+      // Add dialog inside Home Assistant's own tree before setting properties
+      this._getDialogContainer().appendChild(dialog);
 
       // Handle dialog cleanup properly
       const handleDialogClose = (_e) => {
@@ -700,9 +720,9 @@ export class ActionsCardEditor extends LitElement {
 
         this._activeChildEditors.delete(dialog);
 
-        if (dialog.parentNode === document.body) {
+        if (dialog.parentNode) {
           try {
-            document.body.removeChild(dialog);
+            dialog.parentNode.removeChild(dialog);
           } catch (error) {
             logDebug('EDITOR', 'Dialog already removed or not found:', error);
           }
@@ -742,7 +762,7 @@ export class ActionsCardEditor extends LitElement {
       // Fallback method - IMPORTANT: Also using saveCardConfig here
       fireEvent(this, 'll-show-dialog', {
         dialogTag: 'hui-dialog-edit-card',
-        dialogImport: () => import('hui-dialog-edit-card'),
+        dialogImport: () => customElements.whenDefined('hui-dialog-edit-card'),
         dialogParams: {
           cardConfig: cardConfig,
           lovelaceConfig: this.lovelace || mainApp.lovelace,
