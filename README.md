@@ -1,8 +1,9 @@
 # Actions Card (Fixed)
 
 > **This is a fork of [Actions Card by nutteloost](https://github.com/I-am-Joel/actions-card-fixed) (MIT licence), maintained by Joel Goodman.** It adds fixes for the visual editor dropdowns and inputs, the confirmation dialog, URL action safety and lock toggling (see the release notes). It installs separately under the name `custom:actions-card-fixed-fixed`, so it can sit alongside the original. All credit for the original card goes to nutteloost. The donation links below are the original author's.
-
-
+>
+> Tested on 2026.11.1.
+> 
 ![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/nutteloost/actions-card/total?label=Downloads)
 [![Buy me a beer](https://img.shields.io/badge/Donate-Buy%20me%20a%20beer-yellow?logo=buy-me-a-coffee)](https://www.buymeacoffee.com/nutteloost)
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs)
@@ -73,8 +74,7 @@ The Actions Card includes a visual editor that appears when you add or edit the 
 - Confirmation dialog options
 - Hold time adjustment
 
-#### Search for 'Actions Card'
-<img src="https://raw.githubusercontent.com/nutteloost/actions-card/main/images/visual_editor_search.png" width="250">
+#### Search for 'Actions Card fixed'
 
 #### Search for the card you want to wrap in the card picker and add it
 <img src="https://raw.githubusercontent.com/nutteloost/actions-card/main/images/card-picker.png" width="350">
