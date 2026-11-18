@@ -1,6 +1,6 @@
 # Actions Card (Fixed)
 
-> **This is a fork of [Actions Card by nutteloost](https://github.com/I-am-Joel/actions-card-fixed) (MIT licence), maintained by Joel Goodman.** It adds fixes for the visual editor dropdowns and inputs, the confirmation dialog, URL action safety and lock toggling (see the release notes). It installs separately under the name `custom:actions-card-fixed-fixed`, so it can sit alongside the original. All credit for the original card goes to nutteloost. The donation links below are the original author's.
+> **This is a fork of [Actions Card by nutteloost](https://github.com/I-am-Joel/actions-card-fixed) (MIT licence), maintained by Joel Goodman.** It adds fixes for the visual editor dropdowns and inputs, the confirmation dialog, URL action safety and lock toggling (see the release notes). It installs separately under the name `custom:actions-card-fixed`, so it can sit alongside the original. All credit for the original card goes to nutteloost. The donation links below are the original author's.
 >
 > Tested on 2026.11.1.
 > 
