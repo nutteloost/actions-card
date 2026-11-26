@@ -1,5 +1,9 @@
-# Actions Card
+# Actions Card (Fixed)
 
+> **This is a fork of [Actions Card by nutteloost](https://github.com/I-am-Joel/actions-card-fixed) (MIT licence), maintained by Joel Goodman.** It adds fixes for the visual editor dropdowns and inputs, the confirmation dialog, URL action safety and lock toggling (see the release notes). It installs separately under the name `custom:actions-card-fixed`, so it can sit alongside the original. All credit for the original card goes to nutteloost. The donation links below are the original author's.
+>
+> Tested on 2026.11.1.
+> 
 ![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/nutteloost/actions-card/total?label=Downloads)
 [![Buy me a beer](https://img.shields.io/badge/Donate-Buy%20me%20a%20beer-yellow?logo=buy-me-a-coffee)](https://www.buymeacoffee.com/nutteloost)
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs)
@@ -34,28 +38,28 @@ A custom card that wraps another card and adds tap, hold, double-tap, and swipe 
 
 ### HACS (Recommended)
 1. Open HACS
-2. Search for "Actions Card" and install it
+2. Search for "Actions Card (Fixed)" and install it
 
 Or click this button to open the repository page in HACS:
 
-[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?repository=actions-card&category=integration&owner=nutteloost)
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?repository=actions-card-fixed&category=plugin&owner=I-am-Joel)
 
 ### HACS (Manual)
 1. Open HACS
 2. Click on the three dots in the top right corner
 3. Select "Custom repositories"
-4. Add this repository URL (https://github.com/nutteloost/actions-card)
+4. Add this repository URL (https://github.com/I-am-Joel/actions-card-fixed)
 5. Click "Add"
-6. Search for "Actions Card" and install it
+6. Search for "Actions Card (Fixed)" and install it
 
 ### Manual Installation
-1. Download `actions-card.js` from the latest release
-2. Copy it to `config/www/actions-card/actions-card.js`
+1. Download `actions-card-fixed.js` from the latest release
+2. Copy it to `config/www/actions-card-fixed/actions-card-fixed.js`
 3. Add the following to your configuration.yaml:
    ```yaml
    lovelace:
      resources:
-       - url: /local/actions-card/actions-card.js
+       - url: /local/actions-card-fixed/actions-card-fixed.js
          type: module
     ```
 4. Restart Home Assistant
@@ -70,8 +74,7 @@ The Actions Card includes a visual editor that appears when you add or edit the 
 - Confirmation dialog options
 - Hold time adjustment
 
-#### Search for 'Actions Card'
-<img src="https://raw.githubusercontent.com/nutteloost/actions-card/main/images/visual_editor_search.png" width="250">
+#### Search for 'Actions Card fixed'
 
 #### Search for the card you want to wrap in the card picker and add it
 <img src="https://raw.githubusercontent.com/nutteloost/actions-card/main/images/card-picker.png" width="350">
@@ -252,7 +255,7 @@ You can customize the hold progress indicator using CSS variables with card-mod 
 <summary><strong>Example configuration</strong></summary>
 
 ```yaml
-type: custom:actions-card
+type: custom:actions-card-fixed
 card:
   type: button
   entity: light.living_room
@@ -283,7 +286,7 @@ The card intelligently preserves normal scrolling behavior on scrollable content
 
 ### Example Configuration
 ```yaml
-type: custom:actions-card
+type: custom:actions-card-fixed
 card:
   type: entities
   entities:
@@ -314,7 +317,7 @@ swipe_down_action:
 <summary><strong>Smart Scene Control:</strong></summary>
 
 ```yaml
-type: custom:actions-card
+type: custom:actions-card-fixed
 card:
   type: button
   entity: scene.movie_night
@@ -355,7 +358,7 @@ prevent_default_dialog: true
 <summary><strong>Multiple Entity Control:</strong></summary>
 
 ```yaml
-type: custom:actions-card
+type: custom:actions-card-fixed
 card:
   type: entities
   title: All Lights
@@ -395,7 +398,7 @@ swipe_down_action:
 <summary><strong>Browser Mod Integration:</strong></summary>
 
 ```yaml
-type: custom:actions-card
+type: custom:actions-card-fixed
 card:
   type: button
   name: Control Popup

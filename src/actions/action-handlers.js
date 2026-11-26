@@ -35,26 +35,6 @@ export function executeNavigateAction(actionConfig, _hass, _config, _childCard) 
 }
 
 /**
- * Executes a URL action
- * @param {Object} actionConfig - Configuration for the URL action
- * @param {Object} _hass - Home Assistant object (unused)
- * @param {Object} _config - Card configuration (unused)
- * @param {Object} _childCard - Child card element (unused)
- */
-export function executeUrlAction(actionConfig, _hass, _config, _childCard) {
-  const url = actionConfig.url_path || '';
-  if (url) {
-    // Only open if url is defined
-    logDebug('ACTION', 'Opening URL:', url, {
-      target: actionConfig.target || '_blank'
-    });
-    window.open(url, actionConfig.target || '_blank'); // Allow specifying target
-  } else {
-    logDebug('ACTION', 'URL action called without url_path');
-  }
-}
-
-/**
  * Executes a toggle action
  * @param {Object} actionConfig - Configuration for the toggle action
  * @param {Object} hass - Home Assistant object
@@ -65,6 +45,12 @@ export function executeToggleAction(actionConfig, hass, config, childCard) {
   const toggleEntity = getEntityId(actionConfig, config, childCard);
   if (toggleEntity) {
     logDebug('ACTION', 'Toggling entity:', toggleEntity);
+    // homeassistant.toggle does not support locks, so use lock/unlock based on state
+    if (toggleEntity.startsWith('lock.')) {
+      const locked = hass.states?.[toggleEntity]?.state === 'locked';
+      hass.callService('lock', locked ? 'unlock' : 'lock', { entity_id: toggleEntity });
+      return;
+    }
     hass.callService('homeassistant', 'toggle', { entity_id: toggleEntity });
   } else {
     logDebug('ACTION', 'Toggle action called without a valid entity_id');

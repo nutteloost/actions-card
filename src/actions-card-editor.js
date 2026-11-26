@@ -486,14 +486,16 @@ export class ActionsCardEditor extends LitElement {
           actionConfig[key] = target.checked;
         } else {
           // For entity pickers and other components, prioritize ev.detail.value
-          actionConfig[key] = ev.detail?.value ?? target.value ?? '';
+          actionConfig[key] =
+            ev.detail && 'value' in ev.detail ? (ev.detail.value ?? '') : (target.value ?? '');
         }
 
         logDebug('CONFIG', `Updating ${option}:`, actionConfig);
         this._config = { ...this._config, [option]: actionConfig };
       } else {
         // Handle action type changes - clean up irrelevant properties
-        const newActionType = target.value;
+        const newActionType = ev.detail?.value ?? target.value;
+        if (newActionType === actionConfig.action) return;
         const cleanedConfig = this._cleanActionConfig(actionConfig, newActionType, option);
         cleanedConfig.action = newActionType;
 
@@ -504,7 +506,9 @@ export class ActionsCardEditor extends LitElement {
       // Handle regular options
       let value;
       // UPDATED: Check for ha-switch or checkbox
-      if (target.type === 'checkbox' || target.tagName === 'HA-SWITCH') {
+      if (ev.detail && 'value' in ev.detail) {
+        value = ev.detail.value;
+      } else if (target.type === 'checkbox') {
         value = target.checked;
       } else {
         value = target.value;
@@ -660,6 +664,26 @@ export class ActionsCardEditor extends LitElement {
   }
 
   /**
+   * Finds where Home Assistant keeps its dialogs, so the wrapped card's editor dialog
+   * sits inside Home Assistant's own element tree. Home Assistant components get their
+   * translation settings from that tree; a dialog attached to document.body is outside it,
+   * which leaves parts of the wrapped card's editor (e.g. Picture upload) blank.
+   * @returns {Node} The node to attach the dialog to
+   * @private
+   */
+  _getDialogContainer() {
+    let node = this.parentNode;
+    while (node) {
+      if (node.localName === 'hui-dialog-edit-card' && node.parentNode) {
+        return node.parentNode;
+      }
+      node = node.parentNode || (node.getRootNode && node.getRootNode().host);
+    }
+    const mainApp = document.querySelector('home-assistant');
+    return mainApp?.shadowRoot || document.body;
+  }
+
+  /**
    * Opens the edit dialog for the wrapped card
    * @private
    */
@@ -687,8 +711,8 @@ export class ActionsCardEditor extends LitElement {
       // Track this dialog for proper lifecycle management
       this._activeChildEditors.add(dialog);
 
-      // Add dialog to body before setting properties
-      document.body.appendChild(dialog);
+      // Add dialog inside Home Assistant's own tree before setting properties
+      this._getDialogContainer().appendChild(dialog);
 
       // Handle dialog cleanup properly
       const handleDialogClose = (_e) => {
@@ -696,9 +720,9 @@ export class ActionsCardEditor extends LitElement {
 
         this._activeChildEditors.delete(dialog);
 
-        if (dialog.parentNode === document.body) {
+        if (dialog.parentNode) {
           try {
-            document.body.removeChild(dialog);
+            dialog.parentNode.removeChild(dialog);
           } catch (error) {
             logDebug('EDITOR', 'Dialog already removed or not found:', error);
           }
@@ -738,7 +762,7 @@ export class ActionsCardEditor extends LitElement {
       // Fallback method - IMPORTANT: Also using saveCardConfig here
       fireEvent(this, 'll-show-dialog', {
         dialogTag: 'hui-dialog-edit-card',
-        dialogImport: () => import('hui-dialog-edit-card'),
+        dialogImport: () => customElements.whenDefined('hui-dialog-edit-card'),
         dialogParams: {
           cardConfig: cardConfig,
           lovelaceConfig: this.lovelace || mainApp.lovelace,
@@ -833,21 +857,18 @@ export class ActionsCardEditor extends LitElement {
     return html`
       <div class="option-row">
         <div class="option-label">${title}</div>
-        <ha-select
+        <ha-selector
+          .hass=${this.hass}
+          .selector=${{
+            select: {
+              mode: 'dropdown',
+              options: ACTION_TYPE_OPTIONS.map((o) => ({ value: o.value, label: o.label }))
+            }
+          }}
           .value=${actionConfig.action || 'none'}
           data-option="${actionType}"
-          @selected=${this._valueChanged}
-          @closed=${(e) => {
-            e._processedByActionsCardEditor = true;
-            e.stopPropagation();
-          }}
-        >
-          ${ACTION_TYPE_OPTIONS.map(
-            (option) => html`
-              <mwc-list-item value="${option.value}">${option.label}</mwc-list-item>
-            `
-          )}
-        </ha-select>
+          @value-changed=${this._valueChanged}
+        ></ha-selector>
       </div>
     `;
   }
@@ -868,71 +889,80 @@ export class ActionsCardEditor extends LitElement {
       case 'navigate':
         return html`
           <div class="config-row">
-            <ha-textfield
-              label="Navigation Path"
+            <ha-selector
+              .hass=${this.hass}
+              .selector=${{ text: {} }}
+              .label=${'Navigation Path'}
               .value=${actionConfig.navigation_path || ''}
               data-option="${actionType}"
               data-attribute="navigation_path"
               @keydown=${(e) => {
                 e._processedByActionsCardEditor = true;
               }}
-              @change=${this._valueChanged}
-            ></ha-textfield>
+              @value-changed=${this._valueChanged}
+            ></ha-selector>
           </div>
           <div class="option-row">
             <div class="option-label">Replace history state</div>
-            <ha-switch
-              .checked=${actionConfig.navigation_replace || false}
+            <ha-selector
+              .hass=${this.hass}
+              .selector=${{ boolean: {} }}
+              .value=${actionConfig.navigation_replace || false}
               data-option="${actionType}"
               data-attribute="navigation_replace"
-              @change=${this._valueChanged}
-            ></ha-switch>
+              @value-changed=${this._valueChanged}
+            ></ha-selector>
           </div>
         `;
       case 'url':
         return html`
           <div class="config-row">
-            <ha-textfield
-              label="URL"
+            <ha-selector
+              .hass=${this.hass}
+              .selector=${{ text: {} }}
+              .label=${'URL'}
               .value=${actionConfig.url_path || ''}
               data-option="${actionType}"
               data-attribute="url_path"
               @keydown=${(e) => {
                 e._processedByActionsCardEditor = true;
               }}
-              @change=${this._valueChanged}
-            ></ha-textfield>
+              @value-changed=${this._valueChanged}
+            ></ha-selector>
           </div>
           <div class="config-row">
-            <ha-select
-              label="Open in"
+            <ha-selector
+              .hass=${this.hass}
+              .label=${'Open in'}
+              .selector=${{
+                select: {
+                  mode: 'dropdown',
+                  options: [
+                    { value: '_blank', label: 'New tab' },
+                    { value: '_self', label: 'Same tab' }
+                  ]
+                }
+              }}
               .value=${actionConfig.target || '_blank'}
               data-option="${actionType}"
               data-attribute="target"
-              @selected=${this._valueChanged}
-              @closed=${(e) => {
-                e._processedByActionsCardEditor = true;
-                e.stopPropagation();
-              }}
-            >
-              <mwc-list-item value="_blank">New tab</mwc-list-item>
-              <mwc-list-item value="_self">Same tab</mwc-list-item>
-            </ha-select>
+              @value-changed=${this._valueChanged}
+            ></ha-selector>
           </div>
         `;
       case 'toggle':
       case 'more-info':
         return html`
           <div class="config-row">
-            <ha-entity-picker
-              label="Entity"
+            <ha-selector
+              .selector=${{ entity: {} }}
+              .label=${'Entity'}
               .hass=${this.hass}
               .value=${actionConfig.entity || ''}
               data-option="${actionType}"
               data-attribute="entity"
               @value-changed=${this._valueChanged}
-              allow-custom-entity
-            ></ha-entity-picker>
+            ></ha-selector>
             <div class="help-text">
               Optional: Leave empty to use the entity from the wrapped card
             </div>
@@ -941,17 +971,18 @@ export class ActionsCardEditor extends LitElement {
       case 'call-service':
         return html`
           <div class="config-row">
-            <ha-textfield
-              label="Service"
+            <ha-selector
+              .hass=${this.hass}
+              .selector=${{ text: {} }}
+              .label=${'Service'}
               .value=${actionConfig.service || ''}
               data-option="${actionType}"
               data-attribute="service"
               @keydown=${(e) => {
                 e._processedByActionsCardEditor = true;
               }}
-              @change=${this._valueChanged}
-              placeholder="domain.service"
-            ></ha-textfield>
+              @value-changed=${this._valueChanged}
+            ></ha-selector>
           </div>
           <div class="config-row yaml-editor-container" data-action-type="${actionType}">
             <ha-yaml-editor
@@ -979,41 +1010,46 @@ export class ActionsCardEditor extends LitElement {
       case 'assist':
         return html`
           <div class="config-row">
-            <ha-textfield
-              label="Pipeline ID (optional)"
+            <ha-selector
+              .hass=${this.hass}
+              .selector=${{ text: {} }}
+              .label=${'Pipeline ID (optional)'}
               .value=${actionConfig.pipeline_id || ''}
               data-option="${actionType}"
               data-attribute="pipeline_id"
               @keydown=${(e) => {
                 e._processedByActionsCardEditor = true;
               }}
-              @change=${this._valueChanged}
-              placeholder="last_used"
-            ></ha-textfield>
+              @value-changed=${this._valueChanged}
+            ></ha-selector>
           </div>
           <div class="option-row">
             <div class="option-label">Start listening immediately</div>
-            <ha-switch
-              .checked=${actionConfig.start_listening || false}
+            <ha-selector
+              .hass=${this.hass}
+              .selector=${{ boolean: {} }}
+              .value=${actionConfig.start_listening || false}
               data-option="${actionType}"
               data-attribute="start_listening"
-              @change=${this._valueChanged}
-            ></ha-switch>
+              @value-changed=${this._valueChanged}
+            ></ha-selector>
           </div>
         `;
       case 'fire-dom-event':
         return html`
           <div class="config-row">
-            <ha-textfield
-              label="Event Type"
+            <ha-selector
+              .hass=${this.hass}
+              .selector=${{ text: {} }}
+              .label=${'Event Type'}
               .value=${actionConfig.event_type || ''}
               data-option="${actionType}"
               data-attribute="event_type"
               @keydown=${(e) => {
                 e._processedByActionsCardEditor = true;
               }}
-              @change=${this._valueChanged}
-            ></ha-textfield>
+              @value-changed=${this._valueChanged}
+            ></ha-selector>
           </div>
           <div class="config-row yaml-editor-container" data-action-type="${actionType}">
             <ha-yaml-editor
@@ -1136,108 +1172,118 @@ export class ActionsCardEditor extends LitElement {
     return html`
       <div class="option-row confirmation-row">
         <div class="option-label">Require confirmation</div>
-        <ha-switch
-          .checked=${hasConfirmation}
-          @change=${(e) => {
+        <ha-selector
+          .hass=${this.hass}
+          .selector=${{ boolean: {} }}
+          .value=${hasConfirmation}
+          @value-changed=${(e) => {
             e._processedByActionsCardEditor = true;
             const newConfig = { ...this._config };
             newConfig[actionType] = {
               ...newConfig[actionType],
-              confirmation: e.target.checked ? { text: 'Are you sure?' } : false
+              confirmation: e.detail.value ? { text: 'Are you sure?' } : false
             };
             this._config = newConfig;
             this._fireConfigChangedWithFlags();
             this.requestUpdate();
           }}
-        ></ha-switch>
+        ></ha-selector>
       </div>
 
       ${hasConfirmation
         ? html`
             <div class="confirmation-config">
               <div class="config-row">
-                <ha-textfield
-                  label="Confirmation Text"
+                <ha-selector
+                  .hass=${this.hass}
+                  .selector=${{ text: {} }}
+                  .label=${'Confirmation Text'}
                   .value=${confirmationConfig.text || 'Are you sure?'}
                   @keydown=${(e) => {
                     e._processedByActionsCardEditor = true;
                   }}
-                  @change=${(e) => {
+                  @value-changed=${(e) => {
                     e._processedByActionsCardEditor = true;
                     const newConfig = { ...this._config };
                     const newConfirmation =
                       typeof newConfig[actionType].confirmation === 'object'
                         ? { ...newConfig[actionType].confirmation }
                         : {};
-                    newConfirmation.text = e.target.value;
+                    newConfirmation.text = e.detail.value;
                     newConfig[actionType].confirmation = newConfirmation;
                     this._config = newConfig;
                     this._fireConfigChangedWithFlags();
                   }}
-                ></ha-textfield>
+                ></ha-selector>
               </div>
               <div class="config-row">
-                <ha-textfield
-                  label="Confirmation Title (optional)"
+                <ha-selector
+                  .hass=${this.hass}
+                  .selector=${{ text: {} }}
+                  .label=${'Confirmation Title (optional)'}
                   .value=${confirmationConfig.title || ''}
                   @keydown=${(e) => {
                     e._processedByActionsCardEditor = true;
                   }}
-                  @change=${(e) => {
+                  @value-changed=${(e) => {
                     e._processedByActionsCardEditor = true;
                     const newConfig = { ...this._config };
                     const newConfirmation =
                       typeof newConfig[actionType].confirmation === 'object'
                         ? { ...newConfig[actionType].confirmation }
                         : {};
-                    newConfirmation.title = e.target.value;
+                    newConfirmation.title = e.detail.value;
                     newConfig[actionType].confirmation = newConfirmation;
                     this._config = newConfig;
                     this._fireConfigChangedWithFlags();
                   }}
-                ></ha-textfield>
+                ></ha-selector>
               </div>
               <div class="config-row">
-                <ha-textfield
-                  label="Confirm Button Text"
+                <ha-selector
+                  .hass=${this.hass}
+                  .selector=${{ text: {} }}
+                  .label=${'Confirm Button Text'}
                   .value=${confirmationConfig.confirm_text || 'Confirm'}
                   @keydown=${(e) => {
                     e._processedByActionsCardEditor = true;
                   }}
-                  @change=${(e) => {
+                  @value-changed=${(e) => {
                     e._processedByActionsCardEditor = true;
                     const newConfig = { ...this._config };
                     const newConfirmation =
                       typeof newConfig[actionType].confirmation === 'object'
                         ? { ...newConfig[actionType].confirmation }
                         : {};
-                    newConfirmation.confirm_text = e.target.value;
+                    newConfirmation.confirm_text = e.detail.value;
                     newConfig[actionType].confirmation = newConfirmation;
                     this._config = newConfig;
                     this._fireConfigChangedWithFlags();
                   }}
-                ></ha-textfield>
+                ></ha-selector>
               </div>
               <div class="config-row">
-                <ha-textfield
-                  label="Cancel Button Text"
+                <ha-selector
+                  .hass=${this.hass}
+                  .selector=${{ text: {} }}
+                  .label=${'Cancel Button Text'}
                   .value=${confirmationConfig.dismiss_text || 'Cancel'}
                   @keydown=${(e) => {
                     e._processedByActionsCardEditor = true;
                   }}
-                  @change=${(e) => {
+                  @value-changed=${(e) => {
                     e._processedByActionsCardEditor = true;
                     const newConfig = { ...this._config };
                     const newConfirmation =
                       typeof newConfig[actionType].confirmation === 'object'
                         ? { ...newConfig[actionType].confirmation }
                         : {};
-                    newConfirmation.dismiss_text = e.target.value;
+                    newConfirmation.dismiss_text = e.detail.value;
                     newConfig[actionType].confirmation = newConfirmation;
                     this._config = newConfig;
                     this._fireConfigChangedWithFlags();
                   }}
-                ></ha-textfield>
+                ></ha-selector>
               </div>
             </div>
           `
@@ -1258,21 +1304,20 @@ export class ActionsCardEditor extends LitElement {
 
     return html`
       <div class="config-row">
-        <ha-textfield
-          label="Hold Time (ms)"
-          type="number"
-          min="100"
-          max="2000"
-          step="100"
+        <ha-selector
+          .hass=${this.hass}
+          .selector=${{
+            number: { mode: 'box', min: 100, max: 2000, step: 100, unit_of_measurement: 'ms' }
+          }}
+          .label=${'Hold Time (ms)'}
           .value=${holdAction.hold_time || 500}
           data-option="hold_action"
           data-attribute="hold_time"
           @keydown=${(e) => {
             e._processedByActionsCardEditor = true;
           }}
-          @change=${this._valueChanged}
-          suffix="ms"
-        ></ha-textfield>
+          @value-changed=${this._valueChanged}
+        ></ha-selector>
         <div class="help-text">
           Time in milliseconds to hold before triggering the action (default: 500ms)
         </div>
@@ -1286,12 +1331,14 @@ export class ActionsCardEditor extends LitElement {
             Display visual feedback during hold and fire action on release
           </div>
         </div>
-        <ha-switch
-          .checked=${holdAction.show_progress || false}
+        <ha-selector
+          .hass=${this.hass}
+          .selector=${{ boolean: {} }}
+          .value=${holdAction.show_progress || false}
           data-option="hold_action"
           data-attribute="show_progress"
-          @change=${this._valueChanged}
-        ></ha-switch>
+          @value-changed=${this._valueChanged}
+        ></ha-selector>
       </div>
     `;
   }
@@ -1422,16 +1469,18 @@ export class ActionsCardEditor extends LitElement {
               When enabled, prevents the default entity information dialog from opening
             </div>
           </div>
-          <ha-switch
-            .checked=${this._config.prevent_default_dialog || false}
-            @change=${(e) => {
+          <ha-selector
+            .hass=${this.hass}
+            .selector=${{ boolean: {} }}
+            .value=${this._config.prevent_default_dialog || false}
+            @value-changed=${(e) => {
               e._processedByActionsCardEditor = true;
               const newConfig = { ...this._config };
-              newConfig.prevent_default_dialog = e.target.checked;
+              newConfig.prevent_default_dialog = e.detail.value;
               this._config = newConfig;
               this._fireConfigChangedWithFlags();
             }}
-          ></ha-switch>
+          ></ha-selector>
         </div>
       </div>
     `;
@@ -1509,7 +1558,7 @@ export class ActionsCardEditor extends LitElement {
         <div class="version-badges">
           <div class="version-badge">v${CARD_VERSION}</div>
           <a
-            href="https://github.com/nutteloost/actions-card"
+            href="https://github.com/I-am-Joel/actions-card-fixed"
             target="_blank"
             rel="noopener noreferrer"
             class="github-badge"
